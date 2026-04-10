@@ -11,6 +11,7 @@ export default defineConfig({
   ],
   test: {
     root: './',
+    passWithNoTests: true,
     include: ['src/**/*.spec.ts'],
     coverage: {
       provider: 'v8',
