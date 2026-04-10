@@ -1,2 +1,10 @@
-// Drizzle table definitions — add tables here as they are created
-export {};
+export { markets } from './markets';
+export { marketSnapshots } from './market-snapshots';
+export { marketEvents } from './market-events';
+export { projectorCursors } from './projector-cursors';
+export { priceReportsRaw } from './price-reports-raw';
+export { priceUpdates } from './price-updates';
+export { depositRequests } from './deposit-requests';
+export { portfolioPositions } from './portfolio-positions';
+export { riskAlerts } from './risk-alerts';
+export { operatorActions } from './operator-actions';
