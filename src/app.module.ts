@@ -5,6 +5,14 @@ import { ConfigModule } from './shared/config/config.module';
 import { DatabaseModule } from './shared/database/database.module';
 import { BlockchainModule } from './shared/blockchain/blockchain.module';
 import { HealthController } from './shared/common/health/health.controller';
+import { ChainProjectorModule } from './modules/chain-projector/chain-projector.module';
+import { MarketStateModule } from './modules/market-state/market-state.module';
+import { OracleModule } from './modules/oracle/oracle.module';
+import { DepositRequestsModule } from './modules/deposit-requests/deposit-requests.module';
+import { QuotesModule } from './modules/quotes/quotes.module';
+import { PortfolioModule } from './modules/portfolio/portfolio.module';
+import { RiskMonitoringModule } from './modules/risk-monitoring/risk-monitoring.module';
+import { AdminOpsModule } from './modules/admin-ops/admin-ops.module';
 
 @Module({
   imports: [
@@ -20,6 +28,14 @@ import { HealthController } from './shared/common/health/health.controller';
     TerminusModule,
     DatabaseModule,
     BlockchainModule,
+    ChainProjectorModule,
+    MarketStateModule,
+    OracleModule,
+    DepositRequestsModule,
+    QuotesModule,
+    PortfolioModule,
+    RiskMonitoringModule,
+    AdminOpsModule,
   ],
   controllers: [HealthController],
 })
