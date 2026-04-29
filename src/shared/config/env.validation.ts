@@ -8,6 +8,7 @@ const envSchema = z.object({
   MARKET_ADDRESS: z
     .string()
     .regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address'),
+  PUBLIC_API_URL: z.url().optional(),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
