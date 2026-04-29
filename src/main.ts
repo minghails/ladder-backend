@@ -11,8 +11,18 @@ async function bootstrap() {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Ladder Markets API')
-    .setDescription('Backend MVP for the one-market private pilot')
+    .setDescription(
+      [
+        'Backend MVP FE-ready REST API documentation for Ladder markets.',
+        '',
+        'Current documented slice focuses on the endpoints in docs/2026-04-29-fe-api-integration-handoff.md.',
+        'Public/read-only endpoints do not require authentication in this MVP slice.',
+        'Monetary, TVL, NAV, token amount, and position value fields are returned as raw precision strings unless a field explicitly documents formatted semantics.',
+        'Ratio fields are formatted decimal strings derived from 1e18-scaled contract values. APY/change/earning fields are currently explicit zero placeholders where documented.',
+      ].join('\n'),
+    )
     .setVersion('0.1.0')
+    .addServer('http://localhost:3000', 'Local development')
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api-docs', app, document);

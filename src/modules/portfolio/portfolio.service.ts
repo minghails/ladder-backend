@@ -1,5 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { desc, or, eq } from 'drizzle-orm';
+import { ContractReaderService, type LivePortfolioPosition } from '@shared/blockchain/contract-reader.service';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { depositRequests } from '@shared/database/schema';
 
@@ -97,52 +98,7 @@ type FixtureReadDatabase = {
 
 type PortfolioDatabase = PortfolioReadDatabase | FixtureReadDatabase;
 
-const PORTFOLIO_POSITIONS: PortfolioPositionDto[] = [
-  {
-    marketAddress: '0x0000000000000000000000000000000000000001',
-    marketSymbol: 'Token A',
-    assetType: 'senior',
-    assetSymbol: 'Senior Token',
-    tokenAddress: '0x0000000000000000000000000000000000000101',
-    amount: '40000',
-    value: '150000',
-    currentApy: '0.0500',
-    allocationPercent: '0.15',
-  },
-  {
-    marketAddress: '0x0000000000000000000000000000000000000002',
-    marketSymbol: 'Token B',
-    assetType: 'junior',
-    assetSymbol: 'Junior Token',
-    tokenAddress: '0x0000000000000000000000000000000000000102',
-    amount: '35000',
-    value: '400000',
-    currentApy: '0.0400',
-    allocationPercent: '0.25',
-  },
-  {
-    marketAddress: '0x0000000000000000000000000000000000000003',
-    marketSymbol: 'Token C',
-    assetType: 'senior',
-    assetSymbol: 'Senior Token',
-    tokenAddress: '0x0000000000000000000000000000000000000103',
-    amount: '60000',
-    value: '275000',
-    currentApy: '0.0550',
-    allocationPercent: '0.30',
-  },
-  {
-    marketAddress: '0x0000000000000000000000000000000000000004',
-    marketSymbol: 'Token D',
-    assetType: 'junior',
-    assetSymbol: 'Junior Token',
-    tokenAddress: '0x0000000000000000000000000000000000000104',
-    amount: '20000',
-    value: '270000',
-    currentApy: '0.0800',
-    allocationPercent: '0.30',
-  },
-];
+const SCALE = 10n ** 18n;
 
 function normalizeAddress(address: string): string {
   return address.toLowerCase();
@@ -154,14 +110,6 @@ function isFixtureReadDatabase(db: PortfolioDatabase | undefined): db is Fixture
 
 function isPortfolioReadDatabase(db: PortfolioDatabase | undefined): db is PortfolioReadDatabase {
   return Boolean(db && 'select' in db && typeof db.select === 'function');
-}
-
-function marketSymbolForAddress(marketAddress: string): string {
-  const position = PORTFOLIO_POSITIONS.find(
-    (item) => item.marketAddress.toLowerCase() === marketAddress.toLowerCase(),
-  );
-
-  return position?.marketSymbol ?? 'Unknown Market';
 }
 
 function mapRequestStatus(status: string): PortfolioRequestStatus {
@@ -177,11 +125,23 @@ function mapRequestStatus(status: string): PortfolioRequestStatus {
   }
 }
 
-function toPortfolioRequestDto(row: DepositRequestRow): PortfolioRequestDto {
+function requestMarketSymbol(row: DepositRequestRow, liveMarketAddress: string, liveMarketSymbol: string): string {
+  if (row.marketAddress.toLowerCase() === liveMarketAddress.toLowerCase()) {
+    return liveMarketSymbol;
+  }
+
+  return 'Unknown Market';
+}
+
+function toPortfolioRequestDto(
+  row: DepositRequestRow,
+  liveMarketAddress: string,
+  liveMarketSymbol: string,
+): PortfolioRequestDto {
   return {
     id: row.requestId,
     marketAddress: row.marketAddress,
-    marketSymbol: marketSymbolForAddress(row.marketAddress),
+    marketSymbol: requestMarketSymbol(row, liveMarketAddress, liveMarketSymbol),
     date: row.createdAt.toISOString(),
     type: row.asSenior ? 'buy_senior_token' : 'buy_junior_token',
     amount: row.amountIn,
@@ -196,44 +156,90 @@ function toPortfolioRequestDto(row: DepositRequestRow): PortfolioRequestDto {
   };
 }
 
+function sumValues(positions: LivePortfolioPosition[]): bigint {
+  return positions.reduce((total, position) => total + BigInt(position.value), 0n);
+}
+
+function allocationPercent(value: string, totalValue: bigint): string {
+  if (totalValue === 0n) {
+    return '0';
+  }
+
+  const scaled = (BigInt(value) * SCALE) / totalValue;
+  const integer = scaled / SCALE;
+  const fraction = scaled % SCALE;
+
+  if (fraction === 0n) {
+    return integer.toString();
+  }
+
+  return `${integer.toString()}.${fraction.toString().padStart(18, '0').replace(/0+$/, '')}`;
+}
+
+function toPortfolioPositionDto(position: LivePortfolioPosition, totalValue: bigint): PortfolioPositionDto {
+  return {
+    marketAddress: position.marketAddress,
+    marketSymbol: position.marketSymbol,
+    assetType: position.assetType,
+    assetSymbol: position.assetSymbol,
+    tokenAddress: position.tokenAddress,
+    amount: position.assets,
+    value: position.value,
+    currentApy: '0',
+    allocationPercent: allocationPercent(position.value, totalValue),
+  };
+}
+
+function stripTranchePrefix(symbol: string): string {
+  return symbol.replace(/^(st|jt)-/, '') || symbol;
+}
+
 @Injectable()
 export class PortfolioService {
   constructor(
+    private readonly contractReader: ContractReaderService,
     @Optional()
     @Inject(DRIZZLE_DB)
     private readonly db?: PortfolioDatabase,
   ) {}
 
   async getPortfolio(address: string): Promise<PortfolioResponseDto> {
-    const pendingRequests = (await this.readRequests(address))
+    const normalizedAddress = normalizeAddress(address);
+    const [livePositions, liveMarket, requestRows] = await Promise.all([
+      this.contractReader.getPortfolioPositions(normalizedAddress),
+      this.contractReader.getMarketState(),
+      this.readRequests(normalizedAddress),
+    ]);
+    const totalValue = sumValues(livePositions);
+    const pendingRequests = requestRows
       .filter((row) => mapRequestStatus(row.status) === 'pending')
-      .map(toPortfolioRequestDto);
+      .map((row) => toPortfolioRequestDto(row, liveMarket.address, stripTranchePrefix(liveMarket.seniorSymbol)));
 
     return {
-      walletAddress: normalizeAddress(address),
+      walletAddress: normalizedAddress,
       summary: {
-        totalValue: '852340.05',
+        totalValue: totalValue.toString(),
         totalValueChange: {
-          amount: '4420.00',
-          percent: '0.52',
+          amount: '0',
+          percent: '0',
         },
-        currentEarning: '6420.75',
-        earning30d: '980.50',
+        currentEarning: '0',
+        earning30d: '0',
         claimable: {
-          amount: '295466.00',
+          amount: '0',
           token: 'USDC',
         },
       },
-      positions: PORTFOLIO_POSITIONS,
+      positions: livePositions.map((position) => toPortfolioPositionDto(position, totalValue)),
       portfolioMetrics: {
-        totalValue: '852340.05',
-        netApy: '0.0754',
+        totalValue: totalValue.toString(),
+        netApy: '0',
       },
       claimableItems: [],
       pendingRequests,
       recentActivities: [],
       dataQuality: {
-        earningsEstimated: true,
+        earningsEstimated: false,
         historyAvailable: false,
         activityIndexedUntilBlock: null,
       },
@@ -241,9 +247,17 @@ export class PortfolioService {
   }
 
   async getRequests(address: string): Promise<PortfolioRequestsResponseDto> {
+    const normalizedAddress = normalizeAddress(address);
+    const [liveMarket, requests] = await Promise.all([
+      this.contractReader.getMarketState(),
+      this.readRequests(normalizedAddress),
+    ]);
+
     return {
-      walletAddress: normalizeAddress(address),
-      requests: (await this.readRequests(address)).map(toPortfolioRequestDto),
+      walletAddress: normalizedAddress,
+      requests: requests.map((row) =>
+        toPortfolioRequestDto(row, liveMarket.address, stripTranchePrefix(liveMarket.seniorSymbol)),
+      ),
     };
   }
 

@@ -22,6 +22,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function hasStructuredError(value: unknown): value is {
+  error: { code: string; message: string; details?: Record<string, unknown> };
+} {
+  if (!isRecord(value) || !isRecord(value['error'])) {
+    return false;
+  }
+
+  const error = value['error'];
+  return typeof error['code'] === 'string' && typeof error['message'] === 'string';
+}
+
 @Catch()
 export class StandardExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
@@ -37,6 +48,12 @@ export class StandardExceptionFilter implements ExceptionFilter {
       const exceptionResponse = exception.getResponse();
       if (typeof exceptionResponse === 'string') {
         message = exceptionResponse;
+      } else if (hasStructuredError(exceptionResponse)) {
+        const structuredError = exceptionResponse.error;
+        response
+          .status(status)
+          .json(createErrorResponse(structuredError.code, structuredError.message, structuredError.details));
+        return;
       } else if (isRecord(exceptionResponse)) {
         const msg = exceptionResponse['message'];
         if (typeof msg === 'string') {
