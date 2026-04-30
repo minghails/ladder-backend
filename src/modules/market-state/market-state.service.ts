@@ -1,5 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
+import {
+  calculateJuniorWithdrawalCapacity,
+  calculateSeniorDepositCapacity,
+  formatScaledRatio,
+  isPriceStale,
+  PRICE_STALE_SECONDS,
+  unixSecondsToIso,
+} from './market-calculations';
+import {
+  BASE_SEPOLIA_MARKET_NETWORK,
+  MARKET_CHART_FIXTURES,
+  type MarketChartMetric,
+  type MarketChartRange,
+  MARKET_FACTSHEET_ROWS,
+  MARKET_SETTLEMENT_LABELS,
+} from './market-metadata.config';
 
 export interface MarketNetworkDto {
   chainId: number;
@@ -70,15 +86,6 @@ export interface MarketListResponseDto {
   markets: MarketListItemDto[];
 }
 
-const BASE_SEPOLIA: MarketNetworkDto = {
-  chainId: 84532,
-  name: 'Base Sepolia',
-  icon: 'ethereum',
-};
-
-const PRICE_STALE_SECONDS = 24 * 60 * 60;
-const SCALE = 10n ** 18n;
-
 function toListItem(market: MarketDetailDto): MarketListItemDto {
   return {
     address: market.address,
@@ -102,46 +109,20 @@ function stripTranchePrefix(symbol: string): string {
   return symbol.replace(/^(st|jt)-/, '') || symbol;
 }
 
-function formatScaledRatio(value: string): string {
-  const ratio = BigInt(value);
-  const integer = ratio / SCALE;
-  const fraction = ratio % SCALE;
-
-  if (fraction === 0n) {
-    return integer.toString();
-  }
-
-  const fractionText = fraction.toString().padStart(18, '0').replace(/0+$/, '');
-  return `${integer.toString()}.${fractionText}`;
-}
-
-function unixSecondsToIso(value: string): string {
-  return new Date(Number(value) * 1000).toISOString();
-}
-
-function isStale(lastUpdatedTime: string): boolean {
-  const lastUpdatedSeconds = Number(lastUpdatedTime);
-  if (!Number.isFinite(lastUpdatedSeconds) || lastUpdatedSeconds <= 0) {
-    return true;
-  }
-
-  return Math.floor(Date.now() / 1000) - lastUpdatedSeconds > PRICE_STALE_SECONDS;
+function statusWarnings(live: LiveMarketState): string[] {
+  return [...(live.halted ? ['MARKET_HALTED'] : []), ...(isPriceStale(live.lastUpdatedTime) ? ['STALE_PRICE'] : [])];
 }
 
 function toMarketDetail(live: LiveMarketState): MarketDetailDto {
   const marketSymbol = stripTranchePrefix(live.seniorSymbol);
-  const stalePrice = isStale(live.lastUpdatedTime);
-  const warnings = [
-    ...(live.halted ? ['MARKET_HALTED'] : []),
-    ...(stalePrice ? ['STALE_PRICE'] : []),
-  ];
+  const stalePrice = isPriceStale(live.lastUpdatedTime);
 
   return {
     address: live.address,
     symbol: marketSymbol,
     name: marketSymbol,
     description: `${marketSymbol} Ladder market`,
-    network: BASE_SEPOLIA,
+    network: BASE_SEPOLIA_MARKET_NETWORK,
     totalTvl: live.nav,
     senior: {
       symbol: live.seniorSymbol,
@@ -161,7 +142,7 @@ function toMarketDetail(live: LiveMarketState): MarketDetailDto {
     status: {
       halted: live.halted,
       stalePrice,
-      warnings,
+      warnings: statusWarnings(live),
     },
     underlying: {
       symbol: marketSymbol,
@@ -191,6 +172,17 @@ function toMarketDetail(live: LiveMarketState): MarketDetailDto {
   };
 }
 
+function chartTimestamps(): string[] {
+  return [
+    '2026-04-01T00:00:00.000Z',
+    '2026-04-07T00:00:00.000Z',
+    '2026-04-13T00:00:00.000Z',
+    '2026-04-19T00:00:00.000Z',
+    '2026-04-25T00:00:00.000Z',
+    '2026-04-30T00:00:00.000Z',
+  ];
+}
+
 @Injectable()
 export class MarketStateService {
   constructor(private readonly contractReader: ContractReaderService) {}
@@ -204,6 +196,131 @@ export class MarketStateService {
   }
 
   async getMarket(address: string): Promise<MarketDetailDto> {
+    return toMarketDetail(await this.getLiveMarket(address));
+  }
+
+  async getDepositLimits(address: string) {
+    const live = await this.getLiveMarket(address);
+    const capacity = calculateSeniorDepositCapacity(live.navSt, live.navJt, live.maxStJtRatio);
+    const available = !live.halted && capacity !== '0';
+
+    return {
+      market: live.address,
+      senior: {
+        available,
+        capacity,
+        reason: available ? null : live.halted ? 'MARKET_HALTED' : 'SENIOR_CAPACITY_EXHAUSTED',
+        formula: 'D_max = J * L_max - S',
+      },
+      dataQuality: {
+        sources: {
+          nav: 'live_contract',
+          limits: 'derived',
+        },
+      },
+    };
+  }
+
+  async getPriceStatus(address: string) {
+    const live = await this.getLiveMarket(address);
+    const stale = isPriceStale(live.lastUpdatedTime);
+
+    return {
+      market: live.address,
+      lastUpdatedAt: unixSecondsToIso(live.lastUpdatedTime),
+      stale,
+      staleAfterSeconds: PRICE_STALE_SECONDS,
+      warnings: stale ? ['STALE_PRICE'] : [],
+      dataQuality: {
+        sources: {
+          lastUpdatedTime: 'live_contract',
+          staleStatus: 'derived',
+        },
+      },
+    };
+  }
+
+  async getTradeConstraints(address: string) {
+    const live = await this.getLiveMarket(address);
+    const seniorDepositCapacity = calculateSeniorDepositCapacity(live.navSt, live.navJt, live.maxStJtRatio);
+    const juniorWithdrawalCapacity = calculateJuniorWithdrawalCapacity(live.navSt, live.navJt, live.maxStJtRatio);
+
+    return {
+      market: live.address,
+      tokens: {
+        base: { symbol: 'USDC', address: live.baseTokenAddress, decimals: 6 },
+        senior: { symbol: live.seniorSymbol, address: live.seniorTrancheAddress, decimals: 18 },
+        junior: { symbol: live.juniorSymbol, address: live.juniorTrancheAddress, decimals: 18 },
+      },
+      capabilities: {
+        depositYt: !live.halted,
+        withdrawYt: true,
+        depositBaseInstant: !live.halted && live.capabilities.depositBaseInstant,
+        depositBaseRequest: !live.halted && live.capabilities.depositBaseRequest,
+        withdrawBaseAsync: live.capabilities.withdrawBaseAsync,
+      },
+      status: {
+        halted: live.halted,
+        stalePrice: isPriceStale(live.lastUpdatedTime),
+      },
+      limits: {
+        seniorDepositCapacity,
+        juniorWithdrawalCapacity,
+      },
+      settlement: MARKET_SETTLEMENT_LABELS,
+      warnings: statusWarnings(live),
+      dataQuality: {
+        sources: {
+          tokens: 'live_contract',
+          capabilities: 'live_contract',
+          limits: 'derived',
+          settlement: 'config',
+        },
+      },
+    };
+  }
+
+  async getFactsheet(address: string) {
+    const live = await this.getLiveMarket(address);
+    const marketSymbol = stripTranchePrefix(live.seniorSymbol);
+
+    return {
+      market: live.address,
+      title: `${marketSymbol} Market Factsheet`,
+      rows: MARKET_FACTSHEET_ROWS,
+      dataQuality: {
+        sources: {
+          factsheet: 'config',
+        },
+      },
+    };
+  }
+
+  async getChart(address: string, metric: MarketChartMetric, range: MarketChartRange = '30d') {
+    const live = await this.getLiveMarket(address);
+    const fixture = MARKET_CHART_FIXTURES[metric];
+    const timestamps = chartTimestamps();
+
+    return {
+      market: live.address,
+      metric,
+      range,
+      headline: {
+        label: fixture.label,
+        value: fixture.value,
+        unit: fixture.unit,
+        source: 'mock',
+      },
+      series: fixture.values.map((value, index) => ({ timestamp: timestamps[index], value, source: 'mock' })),
+      dataQuality: {
+        sources: {
+          series: 'mock',
+        },
+      },
+    };
+  }
+
+  private async getLiveMarket(address: string): Promise<LiveMarketState> {
     const live = await this.contractReader.getMarketState();
 
     if (normalizeAddress(live.address) !== normalizeAddress(address)) {
@@ -216,6 +333,6 @@ export class MarketStateService {
       });
     }
 
-    return toMarketDetail(live);
+    return live;
   }
 }
