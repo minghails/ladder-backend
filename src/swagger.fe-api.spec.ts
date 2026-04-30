@@ -90,12 +90,14 @@ describe('FE-ready Swagger documentation', () => {
     expect(marketDetail?.responses['404']?.description).toContain('Market not found');
   });
 
-  it('documents portfolio endpoints with wallet parameters and data-quality notes', async () => {
+  it('documents portfolio endpoints with wallet parameters, mock controls, pagination, and split response schemas', async () => {
     const document = await createDocument();
 
     const portfolio = document.paths['/portfolio/{address}']?.get;
-    expect(portfolio?.summary).toBe('Get FE-ready portfolio overview');
-    expect(portfolio?.description).toContain('Portfolio and Activities page');
+    expect(portfolio?.summary).toBe('Get lightweight FE-ready portfolio overview');
+    expect(portfolio?.description).toContain('lightweight initial-render data');
+    expect(portfolio?.description).toContain('lazy-load split endpoints');
+    expect(portfolio?.responses['200']?.description).toContain('lightweight');
     const walletAddressParam = portfolio?.parameters?.find(
       (parameter) => 'name' in parameter && parameter.name === 'address',
     );
@@ -106,11 +108,33 @@ describe('FE-ready Swagger documentation', () => {
     expect(walletAddressParam.name).toBe('address');
     expect(walletAddressParam.in).toBe('path');
     expect(walletAddressParam.description).toContain('Wallet address');
+    const overviewIncludeMock = portfolio?.parameters?.find(
+      (parameter) => 'name' in parameter && parameter.name === 'includeMock',
+    );
+    expect(overviewIncludeMock).toBeDefined();
 
     const requests = document.paths['/portfolio/{address}/requests']?.get;
     expect(requests?.summary).toBe('List portfolio deposit requests');
-    expect(requests?.description).toContain('Pending/In Queue');
-    expect(requests?.responses['200']?.description).toContain('Deposit request history');
+    expect(requests?.description).toContain('paginated deposit request history');
+    expect(requests?.responses['200']?.description).toContain('Paginated deposit request history');
+    expect(requests?.parameters?.some((parameter) => 'name' in parameter && parameter.name === 'limit')).toBe(true);
+    expect(requests?.parameters?.some((parameter) => 'name' in parameter && parameter.name === 'cursor')).toBe(true);
+
+    const earnings = document.paths['/portfolio/{address}/earnings']?.get;
+    expect(earnings?.summary).toBe('Get portfolio earnings section');
+    expect(earnings?.description).toContain('lazy-loaded earnings table and chart data');
+    expect(earnings?.responses['200']?.description).toContain('Portfolio earnings table and chart payload');
+    expect(earnings?.parameters?.some((parameter) => 'name' in parameter && parameter.name === 'range')).toBe(true);
+
+    const claimables = document.paths['/portfolio/{address}/claimables']?.get;
+    expect(claimables?.summary).toBe('Get portfolio claimable rows');
+    expect(claimables?.responses['200']?.description).toContain('Paginated claimable rows');
+    expect(claimables?.parameters?.some((parameter) => 'name' in parameter && parameter.name === 'limit')).toBe(true);
+
+    const activities = document.paths['/portfolio/{address}/activities']?.get;
+    expect(activities?.summary).toBe('Get portfolio activity rows');
+    expect(activities?.responses['200']?.description).toContain('Paginated portfolio activity rows');
+    expect(activities?.parameters?.some((parameter) => 'name' in parameter && parameter.name === 'cursor')).toBe(true);
   });
 
   it('includes nested schemas with field-level FE semantics', async () => {
@@ -134,6 +158,23 @@ describe('FE-ready Swagger documentation', () => {
     const portfolioDataQualitySchema = document.components?.schemas?.PortfolioDataQualityDto as SchemaObject | undefined;
     expect(portfolioDataQualitySchema).toBeDefined();
     const earningsEstimatedProperty = portfolioDataQualitySchema?.properties?.earningsEstimated as SchemaObject | undefined;
-    expect(earningsEstimatedProperty?.description).toContain('zero placeholders');
+    const mockEnabledProperty = portfolioDataQualitySchema?.properties?.mockEnabled as SchemaObject | undefined;
+    const sourcesProperty = portfolioDataQualitySchema?.properties?.sources as SchemaObject | undefined;
+    expect(earningsEstimatedProperty?.description).toContain('mock-derived');
+    expect(mockEnabledProperty?.description).toContain('mock fallback data');
+    expect(sourcesProperty?.description).toContain('Per-section data source');
+
+    const portfolioLinksSchema = document.components?.schemas?.PortfolioLinksDto as SchemaObject | undefined;
+    expect(portfolioLinksSchema).toBeDefined();
+    expect(portfolioLinksSchema?.properties?.earnings).toBeDefined();
+    expect(portfolioLinksSchema?.properties?.activities).toBeDefined();
+
+    const pageSchema = document.components?.schemas?.PageDto as SchemaObject | undefined;
+    expect(pageSchema).toBeDefined();
+    expect(pageSchema?.properties?.nextCursor).toBeDefined();
+
+    const claimActionSchema = document.components?.schemas?.PortfolioClaimActionDto as SchemaObject | undefined;
+    const enabledProperty = claimActionSchema?.properties?.enabled as SchemaObject | undefined;
+    expect(enabledProperty?.description).toContain('Mock rows are disabled');
   });
 });

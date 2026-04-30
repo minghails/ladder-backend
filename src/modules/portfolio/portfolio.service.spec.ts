@@ -76,6 +76,57 @@ const LIVE_POSITIONS: LivePortfolioPosition[] = [
   },
 ];
 
+const DB_REQUEST_ROWS: DepositRequestRow[] = [
+  {
+    id: 1,
+    requestId: '42',
+    marketAddress: LIVE_MARKET.address,
+    user: '0xabcdef0000000000000000000000000000000001',
+    receiver: '0xabcdef0000000000000000000000000000000001',
+    asSenior: true,
+    tokenIn: '0x00000000000000000000000000000000000000a0',
+    amountIn: '99800',
+    minYtOut: '99000',
+    status: 'requested',
+    reasonCode: null,
+    txHash: '0xabc',
+    createdAt: new Date('2026-04-14T00:00:00.000Z'),
+    updatedAt: new Date('2026-04-14T00:00:00.000Z'),
+  },
+  {
+    id: 2,
+    requestId: '43',
+    marketAddress: LIVE_MARKET.address,
+    user: '0x1111111111111111111111111111111111111111',
+    receiver: '0xabcdef0000000000000000000000000000000001',
+    asSenior: false,
+    tokenIn: '0x00000000000000000000000000000000000000a0',
+    amountIn: '76600',
+    minYtOut: '76000',
+    status: 'settled',
+    reasonCode: null,
+    txHash: null,
+    createdAt: new Date('2026-04-10T00:00:00.000Z'),
+    updatedAt: new Date('2026-04-11T00:00:00.000Z'),
+  },
+  {
+    id: 3,
+    requestId: '44',
+    marketAddress: LIVE_MARKET.address,
+    user: '0x2222222222222222222222222222222222222222',
+    receiver: '0x2222222222222222222222222222222222222222',
+    asSenior: false,
+    tokenIn: '0x00000000000000000000000000000000000000a0',
+    amountIn: '500',
+    minYtOut: '490',
+    status: 'requested',
+    reasonCode: null,
+    txHash: null,
+    createdAt: new Date('2026-04-09T00:00:00.000Z'),
+    updatedAt: new Date('2026-04-09T00:00:00.000Z'),
+  },
+];
+
 describe('PortfolioService', () => {
   async function createService({
     fakeDb,
@@ -111,7 +162,7 @@ describe('PortfolioService', () => {
     };
   }
 
-  it('returns portfolio summary and positions from live tranche balances', async () => {
+  it('returns portfolio summary and positions from live tranche balances without mock sections by default', async () => {
     const { service, contractReader } = await createService();
 
     const portfolio = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001');
@@ -140,6 +191,8 @@ describe('PortfolioService', () => {
         value: '100000000000000000000',
         currentApy: '0',
         allocationPercent: '0.666666666666666666',
+        source: 'live',
+        apySource: 'placeholder',
       },
       {
         marketAddress: LIVE_MARKET.address,
@@ -151,17 +204,33 @@ describe('PortfolioService', () => {
         value: '50000000000000000000',
         currentApy: '0',
         allocationPercent: '0.333333333333333333',
+        source: 'live',
+        apySource: 'placeholder',
       },
     ]);
     expect(portfolio.portfolioMetrics).toEqual({
       totalValue: '150000000000000000000',
       netApy: '0',
+      netApySource: 'placeholder',
     });
+    expect(portfolio.claimableItems).toEqual([]);
+    expect(portfolio.recentActivities).toEqual([]);
     expect(portfolio.dataQuality).toEqual({
       earningsEstimated: false,
       historyAvailable: false,
       activityIndexedUntilBlock: null,
+      mockEnabled: false,
+      mockedSections: [],
+      sources: {
+        positions: 'live',
+        pendingRequests: 'db',
+        earnings: 'unavailable',
+        earningsHistory: 'unavailable',
+        claimableItems: 'unavailable',
+        recentActivities: 'unavailable',
+      },
     });
+    expect(portfolio.links.earnings).toContain('/portfolio/0xabcdef0000000000000000000000000000000001/earnings');
   });
 
   it('returns zero totals and no positions when live balances are empty', async () => {
@@ -174,32 +243,12 @@ describe('PortfolioService', () => {
     expect(portfolio.portfolioMetrics).toEqual({
       totalValue: '0',
       netApy: '0',
+      netApySource: 'placeholder',
     });
   });
 
-  it('includes DB-backed pending requests in the portfolio overview', async () => {
-    const { service } = await createService({
-      fakeDb: {
-        depositRequestRows: [
-          {
-            id: 1,
-            requestId: '42',
-            marketAddress: LIVE_MARKET.address,
-            user: '0xabcdef0000000000000000000000000000000001',
-            receiver: '0xabcdef0000000000000000000000000000000001',
-            asSenior: true,
-            tokenIn: '0x00000000000000000000000000000000000000a0',
-            amountIn: '99800',
-            minYtOut: '99000',
-            status: 'requested',
-            reasonCode: null,
-            txHash: '0xabc',
-            createdAt: new Date('2026-04-14T00:00:00.000Z'),
-            updatedAt: new Date('2026-04-14T00:00:00.000Z'),
-          },
-        ],
-      },
-    });
+  it('includes DB-backed pending request previews in the portfolio overview', async () => {
+    const { service } = await createService({ fakeDb: { depositRequestRows: DB_REQUEST_ROWS } });
 
     const portfolio = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001');
 
@@ -219,112 +268,99 @@ describe('PortfolioService', () => {
           estimatedAt: null,
           note: 'Final value may vary at settlement',
         },
+        source: 'db',
       },
     ]);
   });
 
-  it('returns an empty request list with normalized wallet address when no DB rows exist', async () => {
+  it('uses mock opt-in for full initial UI previews without generating heavy chart data', async () => {
     const { service } = await createService({ fakeDb: { depositRequestRows: [] } });
 
-    const response = await service.getRequests('0xABCDEF0000000000000000000000000000000001');
-
-    expect(response).toEqual({
-      walletAddress: '0xabcdef0000000000000000000000000000000001',
-      requests: [],
+    const portfolio = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001', {
+      includeMock: true,
     });
+
+    expect(portfolio.summary.currentEarning).not.toBe('0');
+    expect(portfolio.summary.totalValueChange.source).toBe('mock');
+    expect(portfolio.claimableItems).toHaveLength(3);
+    expect(portfolio.pendingRequests).toHaveLength(3);
+    expect(portfolio.recentActivities).toHaveLength(5);
+    expect(portfolio).not.toHaveProperty('earningsHistory');
+    expect(portfolio.dataQuality.mockEnabled).toBe(true);
+    expect(portfolio.dataQuality.mockedSections).toContain('recentActivities');
+    expect(portfolio.links.activities).toContain('includeMock=true');
   });
 
-  it('maps deposit request rows for user or receiver without hardcoded portfolio symbols', async () => {
-    const { service } = await createService({
-      fakeDb: {
-        depositRequestRows: [
-          {
-            id: 1,
-            requestId: '42',
-            marketAddress: LIVE_MARKET.address,
-            user: '0xabcdef0000000000000000000000000000000001',
-            receiver: '0xabcdef0000000000000000000000000000000001',
-            asSenior: true,
-            tokenIn: '0x00000000000000000000000000000000000000a0',
-            amountIn: '99800',
-            minYtOut: '99000',
-            status: 'requested',
-            reasonCode: null,
-            txHash: '0xabc',
-            createdAt: new Date('2026-04-14T00:00:00.000Z'),
-            updatedAt: new Date('2026-04-14T00:00:00.000Z'),
-          },
-          {
-            id: 2,
-            requestId: '43',
-            marketAddress: LIVE_MARKET.address,
-            user: '0x1111111111111111111111111111111111111111',
-            receiver: '0xabcdef0000000000000000000000000000000001',
-            asSenior: false,
-            tokenIn: '0x00000000000000000000000000000000000000a0',
-            amountIn: '76600',
-            minYtOut: '76000',
-            status: 'settled',
-            reasonCode: null,
-            txHash: null,
-            createdAt: new Date('2026-04-10T00:00:00.000Z'),
-            updatedAt: new Date('2026-04-11T00:00:00.000Z'),
-          },
-          {
-            id: 3,
-            requestId: '44',
-            marketAddress: LIVE_MARKET.address,
-            user: '0x2222222222222222222222222222222222222222',
-            receiver: '0x2222222222222222222222222222222222222222',
-            asSenior: false,
-            tokenIn: '0x00000000000000000000000000000000000000a0',
-            amountIn: '500',
-            minYtOut: '490',
-            status: 'requested',
-            reasonCode: null,
-            txHash: null,
-            createdAt: new Date('2026-04-09T00:00:00.000Z'),
-            updatedAt: new Date('2026-04-09T00:00:00.000Z'),
-          },
-        ],
-      },
+  it('returns paginated DB requests and does not mix mock rows when real request rows exist', async () => {
+    const { service } = await createService({ fakeDb: { depositRequestRows: DB_REQUEST_ROWS } });
+
+    const response = await service.getRequests('0xABCDEF0000000000000000000000000000000001', {
+      includeMock: true,
+      limit: 1,
     });
 
-    const response = await service.getRequests('0xABCDEF0000000000000000000000000000000001');
+    expect(response.requests).toHaveLength(1);
+    expect(response.requests[0]?.id).toBe('42');
+    expect(response.requests[0]?.source).toBe('db');
+    expect(response.page).toEqual({ limit: 1, nextCursor: '1', hasMore: true });
+  });
 
-    expect(response.requests).toEqual([
-      {
-        id: '42',
-        marketAddress: LIVE_MARKET.address,
-        marketSymbol: 'mEDGE',
-        date: '2026-04-14T00:00:00.000Z',
-        type: 'buy_senior_token',
-        amount: '99800',
-        value: '99800',
-        status: 'pending',
-        ladderRequestId: '42',
-        txHash: '0xabc',
-        settlement: {
-          estimatedAt: null,
-          note: 'Final value may vary at settlement',
-        },
-      },
-      {
-        id: '43',
-        marketAddress: LIVE_MARKET.address,
-        marketSymbol: 'mEDGE',
-        date: '2026-04-10T00:00:00.000Z',
-        type: 'buy_junior_token',
-        amount: '76600',
-        value: '76600',
-        status: 'settled',
-        ladderRequestId: '43',
-        txHash: null,
-        settlement: {
-          estimatedAt: null,
-          note: 'Final value may vary at settlement',
-        },
-      },
-    ]);
+  it('returns mock requests with pagination only when requested and DB has no rows', async () => {
+    const { service } = await createService({ fakeDb: { depositRequestRows: [] } });
+
+    const response = await service.getRequests('0xABCDEF0000000000000000000000000000000001', {
+      includeMock: true,
+      limit: 2,
+    });
+
+    expect(response.requests).toHaveLength(2);
+    expect(response.requests.every((request) => request.source === 'mock')).toBe(true);
+    expect(response.page).toEqual({ limit: 2, nextCursor: '2', hasMore: true });
+  });
+
+  it('returns mock earnings with controlled range and no pagination-heavy payload', async () => {
+    const { service } = await createService();
+
+    const response = await service.getEarnings('0xABCDEF0000000000000000000000000000000001', {
+      includeMock: true,
+      range: '30d',
+      granularity: 'day',
+    });
+
+    expect(response.walletAddress).toBe('0xabcdef0000000000000000000000000000000001');
+    expect(response.earnings.length).toBeGreaterThan(0);
+    expect(response.history.range).toBe('30d');
+    expect(response.history.series[0]?.points).toHaveLength(30);
+    expect(response.dataQuality.sources.earnings).toBe('mock');
+  });
+
+  it('returns empty earnings when mock is not enabled', async () => {
+    const { service } = await createService();
+
+    const response = await service.getEarnings('0xABCDEF0000000000000000000000000000000001');
+
+    expect(response.earnings).toEqual([]);
+    expect(response.history.series).toEqual([]);
+    expect(response.dataQuality.historyAvailable).toBe(false);
+  });
+
+  it('returns paginated mock claimables and activities for lazy FE sections', async () => {
+    const { service } = await createService();
+
+    const claimables = await service.getClaimables('0xABCDEF0000000000000000000000000000000001', {
+      includeMock: true,
+      limit: 2,
+    });
+    const activities = await service.getActivities('0xABCDEF0000000000000000000000000000000001', {
+      includeMock: true,
+      limit: 2,
+    });
+
+    expect(claimables.items).toHaveLength(2);
+    expect(claimables.items.every((item) => !item.action.enabled)).toBe(true);
+    expect(claimables.page).toEqual({ limit: 2, nextCursor: '2', hasMore: true });
+    expect(activities.items).toHaveLength(2);
+    expect(activities.items.every((item) => item.source === 'mock')).toBe(true);
+    expect(activities.page).toEqual({ limit: 2, nextCursor: '2', hasMore: true });
   });
 });
