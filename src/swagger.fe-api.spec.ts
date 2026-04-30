@@ -6,6 +6,7 @@ import type { SchemaObject } from '@nestjs/swagger/dist/interfaces/open-api-spec
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
 import { MarketStateModule } from './modules/market-state/market-state.module';
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
+import { QuotesModule } from './modules/quotes/quotes.module';
 
 function createFeApiDocument(app: INestApplication): OpenAPIObject {
   const config = new DocumentBuilder()
@@ -44,7 +45,7 @@ const LIVE_MARKET: LiveMarketState = {
 describe('FE-ready Swagger documentation', () => {
   async function createDocument() {
     const module = await Test.createTestingModule({
-      imports: [MarketStateModule, PortfolioModule],
+      imports: [MarketStateModule, PortfolioModule, QuotesModule],
     })
       .overrideProvider(ContractReaderService)
       .useValue({
@@ -88,6 +89,31 @@ describe('FE-ready Swagger documentation', () => {
       type: 'string',
     });
     expect(marketDetail?.responses['404']?.description).toContain('Market not found');
+
+    expect(document.paths['/markets/{address}/trade-constraints']?.get?.summary).toBe('Get FE trade constraints');
+    expect(document.paths['/markets/{address}/deposit-limits']?.get?.summary).toBe('Get market deposit limits');
+    expect(document.paths['/markets/{address}/price-status']?.get?.summary).toBe('Get market price freshness status');
+    expect(document.paths['/markets/{address}/factsheet']?.get?.summary).toBe('Get market factsheet');
+    const charts = document.paths['/markets/{address}/charts']?.get;
+    expect(charts?.summary).toBe('Get market chart payload');
+    expect(charts?.parameters?.some((parameter) => 'name' in parameter && parameter.name === 'metric')).toBe(true);
+  });
+
+  it('documents quote endpoints as action hints without calldata', async () => {
+    const document = await createDocument();
+
+    const depositBase = document.paths['/quotes/deposit-base']?.post;
+    expect(depositBase?.summary).toBe('Quote base-token deposit');
+    expect(depositBase?.description).toContain('never includes raw calldata');
+
+    const withdrawYt = document.paths['/quotes/withdraw-yt']?.post;
+    expect(withdrawYt?.summary).toBe('Quote YT withdrawal');
+    expect(withdrawYt?.description).toContain('never includes raw calldata');
+
+    const actionSchema = document.components?.schemas?.QuoteActionDto as SchemaObject | undefined;
+    const calldataIncluded = actionSchema?.properties?.calldataIncluded as SchemaObject | undefined;
+    expect(calldataIncluded?.description).toContain('Always false');
+    expect(calldataIncluded?.example).toBe(false);
   });
 
   it('documents portfolio endpoints with wallet parameters, mock controls, pagination, and split response schemas', async () => {

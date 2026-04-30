@@ -15,16 +15,10 @@ export class MarketTrancheDto {
   @ApiProperty({ description: 'Live tranche token symbol read from the tranche contract.', example: 'st-mEDGE' })
   symbol!: string;
 
-  @ApiProperty({
-    description: 'Current backend placeholder APY as a decimal string. Live APY calculation is not implemented yet, so runtime currently returns 0.',
-    example: '0',
-  })
+  @ApiProperty({ description: 'Current backend placeholder APY as a decimal string. Live APY calculation is not implemented yet, so runtime currently returns 0.', example: '0' })
   apy!: string;
 
-  @ApiProperty({
-    description: 'Live tranche NAV/TVL in raw token precision as a string, read from the Market contract. FE should format according to token decimals.',
-    example: '30000000000000000000000000',
-  })
+  @ApiProperty({ description: 'Live tranche NAV/TVL in raw token precision as a string, read from the Market contract. FE should format according to token decimals.', example: '30000000000000000000000000' })
   tvl!: string;
 }
 
@@ -46,12 +40,7 @@ export class MarketStatusDto {
   @ApiProperty({ description: 'Whether the last market price is stale.', example: false })
   stalePrice!: boolean;
 
-  @ApiProperty({
-    description: 'Machine-readable warning flags for MVP-safe UI notices.',
-    example: [],
-    isArray: true,
-    type: String,
-  })
+  @ApiProperty({ description: 'Machine-readable warning flags for MVP-safe UI notices.', example: [], isArray: true, type: String })
   warnings!: string[];
 }
 
@@ -71,10 +60,7 @@ export class MarketListItemDto {
   @ApiProperty({ description: 'Network metadata for FE display.', type: MarketNetworkDto })
   network!: MarketNetworkDto;
 
-  @ApiProperty({
-    description: 'Live total market NAV/TVL in raw token precision as a string, read from the Market contract. FE should format according to token decimals.',
-    example: '40000000000000000000000000',
-  })
+  @ApiProperty({ description: 'Live total market NAV/TVL in raw token precision as a string, read from the Market contract. FE should format according to token decimals.', example: '40000000000000000000000000' })
   totalTvl!: string;
 
   @ApiProperty({ description: 'Senior tranche display data.', type: MarketTrancheDto })
@@ -165,4 +151,177 @@ export class MarketDetailDto extends MarketListItemDto {
 
   @ApiProperty({ description: 'Live adaptor/market capability flags. FE should use these to enable or hide actions.', type: MarketCapabilitiesDto })
   capabilities!: MarketCapabilitiesDto;
+}
+
+class DataQualityDto {
+  @ApiProperty({ description: 'Per-field data source labels such as live_contract, derived, config, or mock.', example: { nav: 'live_contract', limits: 'derived' } })
+  sources!: Record<string, string>;
+}
+
+class SeniorDepositLimitDto {
+  @ApiProperty({ description: 'Whether senior deposits have remaining capacity and market is not halted.', example: true })
+  available!: boolean;
+
+  @ApiProperty({ description: 'Raw senior deposit capacity using D_max = J * L_max - S.', example: '30000000000000000000000000' })
+  capacity!: string;
+
+  @ApiProperty({ description: 'Reason code when unavailable.', example: null, nullable: true })
+  reason!: string | null;
+
+  @ApiProperty({ description: 'Canonical capacity formula used by backend.', example: 'D_max = J * L_max - S' })
+  formula!: string;
+}
+
+export class MarketDepositLimitsResponseDto {
+  @ApiProperty({ description: 'Market address.', example: '0x3aDa769dC813e3376fCD40d05bEA12263048A487' })
+  market!: string;
+
+  @ApiProperty({ description: 'Senior deposit limit and availability.', type: SeniorDepositLimitDto })
+  senior!: SeniorDepositLimitDto;
+
+  @ApiProperty({ description: 'Source labels for this response.', type: DataQualityDto })
+  dataQuality!: DataQualityDto;
+}
+
+export class MarketPriceStatusResponseDto {
+  @ApiProperty({ description: 'Market address.', example: '0x3aDa769dC813e3376fCD40d05bEA12263048A487' })
+  market!: string;
+
+  @ApiProperty({ description: 'ISO timestamp of latest price update.', example: '2026-04-30T00:00:00.000Z' })
+  lastUpdatedAt!: string;
+
+  @ApiProperty({ description: 'Whether price is stale under the MVP threshold.', example: false })
+  stale!: boolean;
+
+  @ApiProperty({ description: 'Staleness threshold in seconds.', example: 86400 })
+  staleAfterSeconds!: number;
+
+  @ApiProperty({ description: 'Machine-readable warning flags.', example: ['STALE_PRICE'], isArray: true, type: String })
+  warnings!: string[];
+
+  @ApiProperty({ description: 'Source labels for this response.', type: DataQualityDto })
+  dataQuality!: DataQualityDto;
+}
+
+class TradeTokenDto {
+  @ApiProperty({ description: 'Token symbol.', example: 'USDC' })
+  symbol!: string;
+
+  @ApiProperty({ description: 'Token address.', example: '0x00000000000000000000000000000000000000a0' })
+  address!: string;
+
+  @ApiProperty({ description: 'Token decimals.', example: 18 })
+  decimals!: number;
+}
+
+class TradeTokensDto {
+  @ApiProperty({ type: TradeTokenDto })
+  base!: TradeTokenDto;
+
+  @ApiProperty({ type: TradeTokenDto })
+  senior!: TradeTokenDto;
+
+  @ApiProperty({ type: TradeTokenDto })
+  junior!: TradeTokenDto;
+}
+
+class TradeLimitsDto {
+  @ApiProperty({ description: 'Raw senior deposit capacity.', example: '30000000000000000000000000' })
+  seniorDepositCapacity!: string;
+
+  @ApiProperty({ description: 'Raw junior withdrawal capacity where safely expressible.', example: '5000000000000000000000000' })
+  juniorWithdrawalCapacity!: string;
+}
+
+export class MarketTradeConstraintsResponseDto {
+  @ApiProperty({ description: 'Market address.', example: '0x3aDa769dC813e3376fCD40d05bEA12263048A487' })
+  market!: string;
+
+  @ApiProperty({ description: 'Base, Senior, and Junior token metadata.', type: TradeTokensDto })
+  tokens!: TradeTokensDto;
+
+  @ApiProperty({ description: 'Market/adaptor capability flags.', type: MarketCapabilitiesDto })
+  capabilities!: MarketCapabilitiesDto;
+
+  @ApiProperty({ description: 'Derived trading constraints.', type: TradeLimitsDto })
+  limits!: TradeLimitsDto;
+
+  @ApiProperty({ description: 'Settlement labels from config.', example: { depositBaseInstant: 'Instant when adaptor liquidity is available' } })
+  settlement!: Record<string, string>;
+
+  @ApiProperty({ description: 'Warning flags such as MARKET_HALTED or STALE_PRICE.', example: [], isArray: true, type: String })
+  warnings!: string[];
+
+  @ApiProperty({ description: 'Source labels for this response.', type: DataQualityDto })
+  dataQuality!: DataQualityDto;
+}
+
+class FactsheetRowDto {
+  @ApiProperty({ example: 'Underlying' })
+  label!: string;
+
+  @ApiProperty({ example: 'mEDGE' })
+  value!: string;
+
+  @ApiProperty({ example: 'config' })
+  source!: string;
+}
+
+export class MarketFactsheetResponseDto {
+  @ApiProperty({ description: 'Market address.', example: '0x3aDa769dC813e3376fCD40d05bEA12263048A487' })
+  market!: string;
+
+  @ApiProperty({ description: 'Factsheet title.', example: 'mEDGE Market Factsheet' })
+  title!: string;
+
+  @ApiProperty({ description: 'Config-backed factsheet rows.', type: FactsheetRowDto, isArray: true })
+  rows!: FactsheetRowDto[];
+
+  @ApiProperty({ description: 'Source labels for this response.', type: DataQualityDto })
+  dataQuality!: DataQualityDto;
+}
+
+class ChartHeadlineDto {
+  @ApiProperty({ example: 'Yield APY' })
+  label!: string;
+
+  @ApiProperty({ example: '8.40' })
+  value!: string;
+
+  @ApiProperty({ example: '%' })
+  unit!: string;
+
+  @ApiProperty({ example: 'mock' })
+  source!: string;
+}
+
+class ChartPointDto {
+  @ApiProperty({ example: '2026-04-30T00:00:00.000Z' })
+  timestamp!: string;
+
+  @ApiProperty({ example: '8.40' })
+  value!: string;
+
+  @ApiProperty({ example: 'mock' })
+  source!: string;
+}
+
+export class MarketChartResponseDto {
+  @ApiProperty({ description: 'Market address.', example: '0x3aDa769dC813e3376fCD40d05bEA12263048A487' })
+  market!: string;
+
+  @ApiProperty({ description: 'Requested chart metric.', example: 'yield' })
+  metric!: string;
+
+  @ApiProperty({ description: 'Requested chart range.', example: '30d' })
+  range!: string;
+
+  @ApiProperty({ description: 'Metric-specific headline metadata.', type: ChartHeadlineDto })
+  headline!: ChartHeadlineDto;
+
+  @ApiProperty({ description: 'Deterministic MVP chart points.', type: ChartPointDto, isArray: true })
+  series!: ChartPointDto[];
+
+  @ApiProperty({ description: 'Source labels for this response.', type: DataQualityDto })
+  dataQuality!: DataQualityDto;
 }

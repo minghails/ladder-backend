@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
 import { MarketStateService } from './market-state.service';
@@ -18,7 +18,7 @@ const LIVE_MARKET: LiveMarketState = {
   currentStJtRatio: '3000000000000000000',
   maxStJtRatio: '6000000000000000000',
   latestYtPrice: '1000000000000000000',
-  lastUpdatedTime: '1777392000',
+  lastUpdatedTime: '1777507200',
   halted: false,
   capabilities: {
     depositBaseInstant: true,
@@ -29,6 +29,15 @@ const LIVE_MARKET: LiveMarketState = {
 };
 
 describe('MarketStateService', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-30T00:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   async function createService(liveMarket: LiveMarketState = LIVE_MARKET) {
     const contractReader = {
       getMarketState: vi.fn().mockResolvedValue(liveMarket),
@@ -138,5 +147,149 @@ describe('MarketStateService', () => {
     const service = module.get(MarketStateService);
 
     await expect(service.listMarkets()).rejects.toThrow('RPC unavailable');
+  });
+
+  it('returns senior deposit limits from the canonical cap formula', async () => {
+    const { service } = await createService();
+
+    const limits = await service.getDepositLimits(LIVE_MARKET.address);
+
+    expect(limits).toMatchObject({
+      market: LIVE_MARKET.address,
+      senior: {
+        available: true,
+        capacity: '30000000000000000000000000',
+        reason: null,
+        formula: 'D_max = J * L_max - S',
+      },
+      dataQuality: {
+        sources: {
+          nav: 'live_contract',
+          limits: 'derived',
+        },
+      },
+    });
+  });
+
+  it('marks senior deposits unavailable when capacity is exhausted', async () => {
+    const { service } = await createService({
+      ...LIVE_MARKET,
+      navSt: '60000000000000000000000000',
+    });
+
+    const limits = await service.getDepositLimits(LIVE_MARKET.address);
+
+    expect(limits.senior).toMatchObject({
+      available: false,
+      capacity: '0',
+      reason: 'SENIOR_CAPACITY_EXHAUSTED',
+    });
+  });
+
+  it('returns standalone price status using the market stale threshold', async () => {
+    const { service } = await createService({
+      ...LIVE_MARKET,
+      lastUpdatedTime: '1777247999',
+    });
+
+    const status = await service.getPriceStatus(LIVE_MARKET.address);
+
+    expect(status).toMatchObject({
+      market: LIVE_MARKET.address,
+      stale: true,
+      staleAfterSeconds: 86400,
+      warnings: ['STALE_PRICE'],
+      dataQuality: {
+        sources: {
+          lastUpdatedTime: 'live_contract',
+          staleStatus: 'derived',
+        },
+      },
+    });
+  });
+
+  it('returns thin trade constraints without UI-only wallet state', async () => {
+    const { service } = await createService();
+
+    const constraints = await service.getTradeConstraints(LIVE_MARKET.address);
+
+    expect(constraints).toMatchObject({
+      market: LIVE_MARKET.address,
+      tokens: {
+        base: { symbol: 'USDC', address: LIVE_MARKET.baseTokenAddress, decimals: 6 },
+        senior: { symbol: 'st-mEDGE', address: LIVE_MARKET.seniorTrancheAddress, decimals: 18 },
+        junior: { symbol: 'jt-mEDGE', address: LIVE_MARKET.juniorTrancheAddress, decimals: 18 },
+      },
+      capabilities: {
+        depositYt: true,
+        withdrawYt: true,
+        depositBaseInstant: true,
+        depositBaseRequest: true,
+        withdrawBaseAsync: false,
+      },
+      limits: {
+        seniorDepositCapacity: '30000000000000000000000000',
+        juniorWithdrawalCapacity: '5000000000000000000000000',
+      },
+      settlement: {
+        depositBaseInstant: 'Instant when adaptor liquidity is available',
+        depositBaseRequest: 'Async request/settlement flow',
+        withdrawYt: 'Direct YT withdrawal through tranche vault',
+      },
+      warnings: [],
+      dataQuality: {
+        sources: {
+          tokens: 'live_contract',
+          capabilities: 'live_contract',
+          limits: 'derived',
+          settlement: 'config',
+        },
+      },
+    });
+    expect(constraints).not.toHaveProperty('walletConnected');
+    expect(constraints).not.toHaveProperty('buttonLabel');
+  });
+
+  it('returns config-backed factsheet rows labelled by source', async () => {
+    const { service } = await createService();
+
+    const factsheet = await service.getFactsheet(LIVE_MARKET.address);
+
+    expect(factsheet.market).toBe(LIVE_MARKET.address);
+    expect(factsheet.title).toBe('mEDGE Market Factsheet');
+    expect(factsheet.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Underlying', value: 'mEDGE', source: 'config' }),
+        expect.objectContaining({ label: 'Network', value: 'Base Sepolia', source: 'config' }),
+      ]),
+    );
+    expect(factsheet.dataQuality.sources.factsheet).toBe('config');
+  });
+
+  it('returns deterministic chart payloads with mock-labelled sources', async () => {
+    const { service } = await createService();
+
+    const chart = await service.getChart(LIVE_MARKET.address, 'yield', '30d');
+
+    expect(chart).toMatchObject({
+      market: LIVE_MARKET.address,
+      metric: 'yield',
+      range: '30d',
+      headline: {
+        label: 'Yield APY',
+        value: '8.40',
+        unit: '%',
+        source: 'mock',
+      },
+      dataQuality: {
+        sources: {
+          series: 'mock',
+        },
+      },
+    });
+    expect(chart.series).toHaveLength(6);
+    expect(chart.series[0]).toHaveProperty('timestamp');
+    expect(chart.series[0]).toHaveProperty('value');
+    expect(chart.series[0]).toHaveProperty('source', 'mock');
   });
 });
