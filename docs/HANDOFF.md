@@ -75,12 +75,31 @@ Before marking any backend slice done:
 
 Backend architecture docs are the source of truth for intended backend architecture and agent handoff. Deployed contracts and operator-supplied ABIs remain execution truth for on-chain behavior.
 
+## API impact reporting
+
+After every backend slice, classify frontend-facing API impact explicitly.
+
+Use these categories:
+
+- `API contract change`: FE may need code changes. This includes added/removed endpoints, path/method/auth changes, request query/body changes, response field rename/add/remove, field type changes, nullability/requiredness changes, enum/status value changes, pagination shape changes, error shape/code changes, or visible semantic changes that alter how FE should parse or branch.
+- `API data-source/behavior change`: endpoint contract stays stable, but returned data source or runtime behavior changes. Examples: mock/config data replaced by indexed/live data, empty states become possible, source labels change, ordering changes within an already documented contract, or freshness/data-quality semantics become real. Report what changed and whether FE action is needed; do not require FE changes by default if names, types, and shapes are unchanged.
+- `No FE-facing API impact`: backend-only changes such as config, migrations with no exposed shape change, internal projector behavior, tests, docs, or refactors.
+
+If any `API contract change` occurred, update `docs/canonical/api-contract.md` in the same PR and include a before/after contract summary for FE.
+
+If only `API data-source/behavior change` occurred, still report it, including whether FE needs to adjust copy, empty-state handling, loading assumptions, source labels, or QA fixtures. If no FE change is needed, say `FE action needed: none`.
+
+If unsure whether FE must change, classify as `FE review recommended` and explain the uncertainty.
+
+At the end of every epic, add an API impact summary that consolidates all slice-level API deltas, including endpoints changed, behavior changes that did not require FE code changes, docs updated, and open FE follow-ups.
+
 ## Completion report
 
 Always report:
 
 - files changed
 - docs changed
+- API impact for FE
 - verification run
 - remaining risks
 - next step
