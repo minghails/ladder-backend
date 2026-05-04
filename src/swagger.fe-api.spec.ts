@@ -94,6 +94,7 @@ describe('FE-ready Swagger documentation', () => {
     expect(document.paths['/markets/{address}/deposit-limits']?.get?.summary).toBe('Get market deposit limits');
     expect(document.paths['/markets/{address}/price-status']?.get?.summary).toBe('Get market price freshness status');
     expect(document.paths['/markets/{address}/factsheet']?.get?.summary).toBe('Get market factsheet');
+    expect(document.paths['/markets/{address}/history']?.get?.summary).toBe('Get indexed market history');
     const charts = document.paths['/markets/{address}/charts']?.get;
     expect(charts?.summary).toBe('Get market chart payload');
     expect(charts?.parameters?.some((parameter) => 'name' in parameter && parameter.name === 'metric')).toBe(true);

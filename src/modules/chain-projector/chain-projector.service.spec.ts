@@ -8,6 +8,8 @@ import { MARKET_ABI } from '@shared/blockchain/contracts';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { marketEvents, markets, projectorCursors } from '@shared/database/schema';
 import { ChainProjectorService } from './chain-projector.service';
+import { MarketSnapshotProjector } from './market-snapshot.projector';
+import { PriceUpdateProjector } from './price-update.projector';
 
 const LIVE_MARKET: LiveMarketState = {
   address: '0x3aDa769dC813e3376fCD40d05bEA12263048A487',
@@ -75,6 +77,8 @@ describe('ChainProjectorService', () => {
     projectorEnabled = false,
     pollIntervalMs = 15_000,
     eventInsertRejects = false,
+    snapshotProjector = { projectEvents: vi.fn().mockResolvedValue(undefined) },
+    priceUpdateProjector = { projectEvents: vi.fn().mockResolvedValue(undefined) },
   }: {
     liveMarket?: LiveMarketState;
     head?: bigint;
@@ -86,6 +90,8 @@ describe('ChainProjectorService', () => {
     projectorEnabled?: boolean;
     pollIntervalMs?: number;
     eventInsertRejects?: boolean;
+    snapshotProjector?: { projectEvents: ReturnType<typeof vi.fn> };
+    priceUpdateProjector?: { projectEvents: ReturnType<typeof vi.fn> };
   } = {}) {
     const marketOnConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
     const eventOnConflictDoNothing = eventInsertRejects
@@ -162,6 +168,14 @@ describe('ChainProjectorService', () => {
             },
           },
         },
+        {
+          provide: MarketSnapshotProjector,
+          useValue: snapshotProjector,
+        },
+        {
+          provide: PriceUpdateProjector,
+          useValue: priceUpdateProjector,
+        },
       ],
     }).compile();
 
@@ -178,6 +192,8 @@ describe('ChainProjectorService', () => {
         eventOnConflictDoNothing,
         cursorOnConflictDoUpdate,
       },
+      snapshotProjector,
+      priceUpdateProjector,
     };
   }
 
@@ -329,6 +345,50 @@ describe('ChainProjectorService', () => {
     await expect(service.runOnce()).rejects.toThrow('event insert failed');
 
     expect(db.cursorValues).not.toHaveBeenCalled();
+  });
+
+  it('runOnce projects decoded snapshots before advancing cursor', async () => {
+    const snapshotProjector = { projectEvents: vi.fn().mockResolvedValue(undefined) };
+    const { service, db } = await createService({
+      logs: [priceUpdatedLog()],
+      snapshotProjector,
+    });
+
+    await service.runOnce();
+
+    expect(snapshotProjector.projectEvents).toHaveBeenCalledWith([
+      expect.objectContaining({
+        eventName: 'PriceUpdated',
+        txHash:
+          '0x0000000000000000000000000000000000000000000000000000000000000200',
+      }),
+    ]);
+    expect(snapshotProjector.projectEvents.mock.invocationCallOrder[0]).toBeLessThan(
+      db.cursorValues.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+    );
+  });
+
+  it('runOnce projects decoded price updates before advancing cursor', async () => {
+    const priceUpdateProjector = {
+      projectEvents: vi.fn().mockResolvedValue(undefined),
+    };
+    const { service, db } = await createService({
+      logs: [priceUpdatedLog()],
+      priceUpdateProjector,
+    });
+
+    await service.runOnce();
+
+    expect(priceUpdateProjector.projectEvents).toHaveBeenCalledWith([
+      expect.objectContaining({
+        eventName: 'PriceUpdated',
+      }),
+    ]);
+    expect(
+      priceUpdateProjector.projectEvents.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      db.cursorValues.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+    );
   });
 
   it('does not start the background loop when projector is disabled', async () => {

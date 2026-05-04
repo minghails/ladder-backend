@@ -2,6 +2,7 @@ import {
   Inject,
   Injectable,
   Logger,
+  Optional,
   type OnApplicationBootstrap,
   type OnApplicationShutdown,
 } from '@nestjs/common';
@@ -15,6 +16,8 @@ import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { marketEvents, markets, projectorCursors } from '@shared/database/schema';
 import { normalizeEventArgs, SUPPORTED_MARKET_EVENT_NAMES } from './projector-events';
 import type { ProjectedEventName } from './projector.types';
+import { MarketSnapshotProjector } from './market-snapshot.projector';
+import { PriceUpdateProjector } from './price-update.projector';
 
 interface ChainProjectorDatabase {
   query: {
@@ -81,6 +84,10 @@ export class ChainProjectorService
     private readonly config: ConfigService,
     @Inject(DRIZZLE_DB)
     private readonly db: ChainProjectorDatabase,
+    @Optional()
+    private readonly snapshotProjector?: MarketSnapshotProjector,
+    @Optional()
+    private readonly priceUpdateProjector?: PriceUpdateProjector,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -145,6 +152,8 @@ export class ChainProjectorService
         .insert(marketEvents)
         .values(decoded.events)
         .onConflictDoNothing();
+      await this.snapshotProjector?.projectEvents(decoded.events);
+      await this.priceUpdateProjector?.projectEvents(decoded.events);
     }
 
     await this.updateCursor(cursorId, chainId, marketAddress, toBlock);

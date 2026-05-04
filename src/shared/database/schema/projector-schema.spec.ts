@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { marketEvents } from './market-events';
+import { marketSnapshots } from './market-snapshots';
+import { priceUpdates } from './price-updates';
 import { projectorCursors } from './projector-cursors';
 
 function columnNamesForUniqueConstraints(table: Parameters<typeof getTableConfig>[0]) {
@@ -36,5 +38,42 @@ describe('projector schema', () => {
     expect(columns['chain_id']?.notNull).toBe(true);
     expect(columns['market_address']?.notNull).toBe(true);
     expect(columns['last_block_hash']?.notNull).toBe(false);
+  });
+
+  it('should define source identity fields and idempotency for market snapshots', () => {
+    const config = getTableConfig(marketSnapshots);
+    const columns = Object.fromEntries(
+      config.columns.map((column) => [column.name, column]),
+    );
+
+    expect(columns['chain_id']?.notNull).toBe(true);
+    expect(columns['block_hash']?.notNull).toBe(true);
+    expect(columns['source_tx_hash']?.notNull).toBe(true);
+    expect(columns['source_log_index']?.notNull).toBe(true);
+    expect(columns['yt_price']?.notNull).toBe(true);
+    expect(columns['jt_st_ratio']?.notNull).toBe(true);
+    expect(columnNamesForUniqueConstraints(marketSnapshots)).toContainEqual([
+      'chain_id',
+      'market_address',
+      'source_tx_hash',
+      'source_log_index',
+    ]);
+  });
+
+  it('should define source identity fields and idempotency for price updates', () => {
+    const config = getTableConfig(priceUpdates);
+    const columns = Object.fromEntries(
+      config.columns.map((column) => [column.name, column]),
+    );
+
+    expect(columns['tx_hash']?.notNull).toBe(true);
+    expect(columns['log_index']?.notNull).toBe(true);
+    expect(columns['block_number']?.notNull).toBe(true);
+    expect(columns['block_hash']?.notNull).toBe(true);
+    expect(columnNamesForUniqueConstraints(priceUpdates)).toContainEqual([
+      'market_address',
+      'tx_hash',
+      'log_index',
+    ]);
   });
 });

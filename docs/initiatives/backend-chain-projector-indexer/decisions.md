@@ -14,12 +14,14 @@
 10. Preserve raw ABI args and expose semantic `stJtRatioAfter`/`stJtRatio` in code/API.
 11. Use block timestamps from viem `getBlock`, not processing time.
 12. Source of truth for async request status is contract events plus adaptor reads when linked.
+13. Keep legacy `market_snapshots.jt_st_ratio` storage for migration safety; projector/API code maps it to semantic `stJtRatio`.
+14. Persist `price_updates` with `(market_address, tx_hash, log_index)` replay identity; keep legacy `jt_st_ratio_after` storage with semantic code/API mapping.
 
 ## Proposed decisions needing execution-time confirmation
 
 1. Exact Market deployment block.
 2. Safe migration strategy for any existing dev DB rows.
-3. Add semantic DB columns such as `st_jt_ratio`, or keep legacy columns and map at code/API boundary.
+3. Whether to add semantic `st_jt_ratio` storage in a later cleanup migration.
 4. Whether `GET /deposit-requests/:id` alone is enough for first request API slice.
 5. Whether optional portfolio activities remain deferred after core projector/read APIs ship.
 

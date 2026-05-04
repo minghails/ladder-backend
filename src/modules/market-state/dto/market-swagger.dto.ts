@@ -325,3 +325,54 @@ export class MarketChartResponseDto {
   @ApiProperty({ description: 'Source labels for this response.', type: DataQualityDto })
   dataQuality!: DataQualityDto;
 }
+
+class MarketHistoryItemDto {
+  @ApiProperty({ example: '123' })
+  blockNumber!: string;
+
+  @ApiProperty({ example: '2026-05-04T00:00:00.000Z' })
+  timestamp!: string;
+
+  @ApiProperty({ example: '1000000000000000000' })
+  nav!: string;
+
+  @ApiProperty({ example: '600000000000000000' })
+  navSt!: string;
+
+  @ApiProperty({ example: '400000000000000000' })
+  navJt!: string;
+
+  @ApiProperty({ description: 'Semantic ST/JT ratio from indexed events.', example: '1500000000000000000' })
+  stJtRatio!: string;
+
+  @ApiProperty({ example: '1000000000000000000' })
+  ytPrice!: string;
+
+  @ApiProperty({ example: false })
+  halted!: boolean;
+}
+
+class MarketHistoryPageDto {
+  @ApiProperty({ example: 100 })
+  limit!: number;
+
+  @ApiProperty({ example: null, nullable: true })
+  nextCursor!: number | null;
+
+  @ApiProperty({ example: false })
+  hasMore!: boolean;
+}
+
+export class MarketHistoryResponseDto {
+  @ApiProperty({ description: 'Market address.', example: '0x3aDa769dC813e3376fCD40d05bEA12263048A487' })
+  market!: string;
+
+  @ApiProperty({ description: 'Indexed market snapshots.', type: MarketHistoryItemDto, isArray: true })
+  items!: MarketHistoryItemDto[];
+
+  @ApiProperty({ description: 'Cursor pagination metadata.', type: MarketHistoryPageDto })
+  page!: MarketHistoryPageDto;
+
+  @ApiProperty({ description: 'Source labels for this response.', type: DataQualityDto })
+  dataQuality!: DataQualityDto;
+}
