@@ -8,6 +8,13 @@
       "when": 1775812802325,
       "tag": "0000_special_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777886398815,
+      "tag": "0001_fluffy_winter_soldier",
+      "breakpoints": true
     }
   ]
 }

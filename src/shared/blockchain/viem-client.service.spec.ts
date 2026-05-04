@@ -14,6 +14,9 @@ describe('ViemClientService', () => {
                 rpcUrl: 'http://localhost:8545',
                 marketAddress: '0x1234567890123456789012345678901234567890',
               },
+              projector: {
+                chainId: 84532,
+              },
             }),
           ],
         }),
@@ -24,5 +27,29 @@ describe('ViemClientService', () => {
     const service = module.get(ViemClientService);
     expect(service).toBeDefined();
     expect(service.getPublicClient()).toBeDefined();
+  });
+
+  it('should expose configured chain ID', async () => {
+    const module = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({
+          load: [
+            () => ({
+              blockchain: {
+                rpcUrl: 'http://localhost:8545',
+                marketAddress: '0x1234567890123456789012345678901234567890',
+              },
+              projector: {
+                chainId: 84532,
+              },
+            }),
+          ],
+        }),
+      ],
+      providers: [ViemClientService],
+    }).compile();
+
+    const service = module.get(ViemClientService);
+    expect(service.getChainId()).toBe(84532);
   });
 });

@@ -25,3 +25,15 @@ export const blockchainConfig = registerAs('blockchain', () => {
   }
   return { rpcUrl, marketAddress };
 });
+
+export const projectorConfig = registerAs('projector', () => ({
+  chainId: parseInt(process.env['CHAIN_ID'] ?? '84532', 10),
+  deploymentBlock: parseInt(process.env['DEPLOYMENT_BLOCK'] ?? '0', 10),
+  enabled: process.env['PROJECTOR_ENABLED'] === 'true',
+  confirmations: parseInt(process.env['PROJECTOR_CONFIRMATIONS'] ?? '3', 10),
+  batchSize: parseInt(process.env['PROJECTOR_BATCH_SIZE'] ?? '2000', 10),
+  pollIntervalMs: parseInt(
+    process.env['PROJECTOR_POLL_INTERVAL_MS'] ?? '15000',
+    10,
+  ),
+}));
