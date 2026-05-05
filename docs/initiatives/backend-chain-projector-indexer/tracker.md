@@ -2,8 +2,8 @@
 
 ## Active
 
-- Epic: Epic 5 — Runbook and Verification
-- Slice: Slice 1 — projector runbook
+- Epic: None — optional Epic 4 complete; backend chain projector/indexer initiative complete except environment-dependent smoke gates
+- Slice: None
 - Plan: `backend/docs/plans/2026-05-04-backend-chain-projector-indexer-plan.md`
 
 ## Planned
@@ -35,15 +35,14 @@
 
 ## In Progress
 
-- None. Epic 3 complete. Optional Epic 4 activities deferred unless explicitly requested; next agent should start Epic 5, Slice 1.
+- None. Optional Epic 4 and Epic 5 complete. Environment-dependent DB/API smoke gates remain blocked/unavailable as recorded below.
 
 ## Next Up
 
-1. Read `session-kickoff-prompt.md`.
-2. Read active epic file only.
-3. Start Epic 5, Slice 1 unless Epic 4 optional activities are explicitly requested.
-4. Run targeted verification.
-5. Update this tracker and add session log.
+1. Provide exact Market deployment block for production-like replay.
+2. Provide/start local PostgreSQL with valid `DATABASE_URL`, then rerun `pnpm db:migrate`.
+3. Start backend with RPC/env, then run API smoke commands.
+4. Run live portfolio activity smoke after projector replay: `/portfolio/:address/activities`.
 
 ## Done
 
@@ -66,10 +65,18 @@
 - 2026-05-04: Epic 3, Slice 3 — deposit request detail endpoint completed. Added `GET /deposit-requests/:id`, indexed request detail response, 404 behavior, DatabaseModule wiring, and canonical API contract shape; `POST /deposit-requests` remains deferred. Verification: RED first on missing `getRequest`; `pnpm test src/modules/deposit-requests` pass. API impact for FE: API contract change — `GET /deposit-requests/:id` is now concrete and `POST /deposit-requests` documented deferred. Session: `backend/docs/initiatives/backend-chain-projector-indexer/sessions/2026-05-04-deposit-request-detail-endpoint.md`.
 - 2026-05-04: Epic 3, Slice 4 — portfolio request mapping check completed. Added nullable `adaptorRequestId` to portfolio request DTO/API docs and mapping from projected `deposit_requests`; no activity derivation added. Verification: `pnpm test src/modules/portfolio` pass. API impact for FE: API contract change — portfolio request rows now include nullable `adaptorRequestId`. Session: `backend/docs/initiatives/backend-chain-projector-indexer/sessions/2026-05-04-epic-03-complete.md`.
 - 2026-05-04: Epic 3 complete. API impact summary for FE: `GET /deposit-requests/:id` now returns indexed request detail with lifecycle fields and `dataQuality.sources.request = indexed_events`; missing detail returns 404; `POST /deposit-requests` remains deferred; `/portfolio/:address/requests` and overview `pendingRequests` rows now include nullable `adaptorRequestId`. Docs updated: `docs/canonical/api-contract.md`. FE follow-up: handle request detail 404, indexed source labels, nullable `adaptorRequestId`, and deferred POST flow.
+- 2026-05-05: Epic 4, Slice 1 — derive activity rows from indexed events completed. Added `PortfolioActivityRepository`, mapped `DepositYT`, `WithdrawYT`, `DepositRequested`, and `DepositSettled` into activity rows, wired overview `recentActivities` and `/portfolio/:address/activities` to indexed rows first, preserved mock fallback only when no indexed rows exist, and updated API docs. Verification: RED first on missing repository/service behavior; `pnpm test src/modules/portfolio` pass; `pnpm test src/modules/portfolio/portfolio-activity.repository.spec.ts` pass; `pnpm lint` pass; `pnpm build` pass. API impact for FE: API data-source/behavior change — activity shape unchanged, source can now be `db`; FE should verify empty-state/source-label handling. Architecture docs checked; no update needed. Session: `backend/docs/initiatives/backend-chain-projector-indexer/sessions/2026-05-05-optional-portfolio-activities.md`.
+- 2026-05-05: Epic 4 complete. API impact summary for FE: `/portfolio/:address/activities` and overview `recentActivities` now use indexed `market_events` when available; `includeMock=true` remains fallback only when no indexed activity rows exist.
+- 2026-05-04: Epic 5, Slice 1 — projector runbook completed. Updated Chain Projector README and local replay runbook with env, migrations, disabled/enabled startup, DB/API checks, stop conditions, exact deployment block warning, and replay/idempotency checks. Verification: docs-only readback review pass; `pnpm lint` pass; `pnpm build` pass. API impact for FE: No FE-facing API impact. Architecture docs checked; no update needed. Session: `backend/docs/initiatives/backend-chain-projector-indexer/sessions/2026-05-04-projector-runbook.md`.
+- 2026-05-04: Epic 5, Slice 2 — canonical docs evaluation completed. Compared API contract, backend architecture, smart contract events, and integration rules against final projector/API/schema behavior; no canonical edits needed. Verification: canonical docs readback comparison pass. API impact for FE: No FE-facing API impact. Architecture docs checked; no update needed. Session: `backend/docs/initiatives/backend-chain-projector-indexer/sessions/2026-05-04-canonical-docs-evaluation.md`.
+- 2026-05-04: Epic 5, Slice 3 — full verification gate completed with environment-dependent smoke gates recorded. Verification: `pnpm test` pass (20 files, 97 tests); `pnpm test src/modules/chain-projector` pass (5 files, 34 tests); `pnpm test src/modules/market-state` pass (1 file, 17 tests); `pnpm lint` pass; `pnpm build` pass. `pnpm db:migrate` failed locally with Drizzle exit 1 during migration apply; command output exposed no database error detail. API smoke unavailable because no app was listening on `localhost:3000`. API impact for FE: No FE-facing API impact. Architecture docs checked; no update needed. Session: `backend/docs/initiatives/backend-chain-projector-indexer/sessions/2026-05-04-full-verification-gate.md`.
+- 2026-05-04: Epic 5 complete. API impact summary for FE: no new FE-facing API impact in Epic 5; runbook/canonical evaluation/verification only. Existing prior epic FE deltas remain: history endpoint, indexed chart source behavior, deposit request detail endpoint, and nullable `adaptorRequestId` on portfolio request rows.
 
 ## Blocked
 
 - Production-like indexing needs exact `DEPLOYMENT_BLOCK` for Market `0x3aDa769dC813e3376fCD40d05bEA12263048A487` on Base Sepolia.
+- DB migration smoke needs local PostgreSQL/valid `DATABASE_URL` investigation; `pnpm db:migrate` failed locally with Drizzle exit 1 and no exposed database error detail.
+- API smoke needs a running backend/RPC/env; `curl http://localhost:3000/markets` failed because nothing was listening on port 3000.
 
 ## Risks
 
@@ -90,7 +97,7 @@
 - Whether dev DB can be reset or migrations must backfill existing rows.
 - Whether to add semantic `st_jt_ratio` columns in a later cleanup migration.
 - Whether `POST /deposit-requests` remains deferred while event-sourced `GET` ships first.
-- Whether optional portfolio activities are included in current implementation pass after Epics 1–3.
+- Optional portfolio activities are included and complete as of 2026-05-05.
 
 ## Canonical docs to assess during execution
 
@@ -101,4 +108,4 @@
 
 ## Recently Updated
 
-- 2026-05-04: Epic 3 completed; optional Epic 4 activities deferred; active slice advanced to Epic 5, Slice 1.
+- 2026-05-05: Optional Epic 4 completed; no active bounded slice remains in this initiative. DB/API smoke gates remain environment-dependent.

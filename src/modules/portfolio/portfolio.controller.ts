@@ -105,7 +105,7 @@ export class PortfolioController {
   @ApiOperation({
     summary: 'Get portfolio activity rows',
     description:
-      'Returns lazy-loaded recent activity rows. Runtime returns mock rows only when includeMock=true until the user activity projector is implemented.',
+      'Returns lazy-loaded recent activity rows derived from indexed Market events. If no indexed rows exist, includeMock=true returns bounded mock rows for FE integration.',
   })
   @ApiParam({ name: 'address', description: 'Wallet address.', example: '0xabcdef0000000000000000000000000000000001' })
   @ApiQuery({ name: 'includeMock', required: false, example: 'true' })
