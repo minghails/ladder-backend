@@ -226,7 +226,7 @@ describe('PortfolioService', () => {
     expect(portfolio.portfolioMetrics).toEqual({
       totalValue: '150000000000000000000',
       netApy: '0',
-      netApySource: 'placeholder',
+      netApySource: 'unavailable',
     });
     expect(portfolio.claimableItems).toEqual([]);
     expect(portfolio.recentActivities).toEqual([]);
@@ -258,7 +258,7 @@ describe('PortfolioService', () => {
     expect(portfolio.portfolioMetrics).toEqual({
       totalValue: '0',
       netApy: '0',
-      netApySource: 'placeholder',
+      netApySource: 'unavailable',
     });
   });
 
@@ -354,6 +354,43 @@ describe('PortfolioService', () => {
     expect(response.page).toEqual({ limit: 1, nextCursor: '1', hasMore: true });
   });
 
+  it('labels unavailable overview financial aggregates without mock fallback by default', async () => {
+    const previousMockFallback = process.env['PORTFOLIO_MOCK_FALLBACK'];
+    process.env['PORTFOLIO_MOCK_FALLBACK'] = 'true';
+    const { service } = await createService({ fakeDb: { depositRequestRows: [] } });
+
+    try {
+      const response = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001');
+
+      expect(response.summary.totalValueChange).toEqual({
+        amount: '0',
+        percent: '0',
+        source: 'unavailable',
+      });
+      expect(response.summary.currentEarning).toBe('0');
+      expect(response.summary.currentEarningSource).toBe('unavailable');
+      expect(response.summary.earning30d).toBe('0');
+      expect(response.summary.earning30dSource).toBe('unavailable');
+      expect(response.summary.claimable).toEqual({
+        amount: '0',
+        token: 'USDC',
+        source: 'unavailable',
+      });
+      expect(response.portfolioMetrics).toEqual({
+        totalValue: '150000000000000000000',
+        netApy: '0',
+        netApySource: 'unavailable',
+      });
+      expect(response.dataQuality.mockedSections).toEqual([]);
+    } finally {
+      if (previousMockFallback === undefined) {
+        delete process.env['PORTFOLIO_MOCK_FALLBACK'];
+      } else {
+        process.env['PORTFOLIO_MOCK_FALLBACK'] = previousMockFallback;
+      }
+    }
+  });
+
   it('uses mock opt-in for full initial UI previews without generating heavy chart data', async () => {
     const { service } = await createService({ fakeDb: { depositRequestRows: [] } });
 
@@ -415,14 +452,107 @@ describe('PortfolioService', () => {
     expect(response.dataQuality.sources.earnings).toBe('mock');
   });
 
-  it('returns empty earnings when mock is not enabled', async () => {
+  it('returns empty unavailable earnings by default without mock rows', async () => {
+    const previousMockFallback = process.env['PORTFOLIO_MOCK_FALLBACK'];
+    process.env['PORTFOLIO_MOCK_FALLBACK'] = 'true';
     const { service } = await createService();
 
-    const response = await service.getEarnings('0xABCDEF0000000000000000000000000000000001');
+    try {
+      const response = await service.getEarnings('0xABCDEF0000000000000000000000000000000001');
 
-    expect(response.earnings).toEqual([]);
-    expect(response.history.series).toEqual([]);
-    expect(response.dataQuality.historyAvailable).toBe(false);
+      expect(response).toEqual({
+        walletAddress: '0xabcdef0000000000000000000000000000000001',
+        earnings: [],
+        history: {
+          range: '30d',
+          granularity: 'day',
+          series: [],
+        },
+        dataQuality: {
+          earningsEstimated: false,
+          historyAvailable: false,
+          activityIndexedUntilBlock: null,
+          mockEnabled: false,
+          mockedSections: [],
+          sources: {
+            positions: 'live',
+            pendingRequests: 'db',
+            earnings: 'unavailable',
+            earningsHistory: 'unavailable',
+            claimableItems: 'unavailable',
+            recentActivities: 'unavailable',
+          },
+        },
+      });
+    } finally {
+      if (previousMockFallback === undefined) {
+        delete process.env['PORTFOLIO_MOCK_FALLBACK'];
+      } else {
+        process.env['PORTFOLIO_MOCK_FALLBACK'] = previousMockFallback;
+      }
+    }
+  });
+
+  it('preserves explicit includeMock earnings fixture mode for FE sandbox only', async () => {
+    const { service } = await createService();
+
+    const response = await service.getEarnings('0xABCDEF0000000000000000000000000000000001', {
+      includeMock: true,
+      range: '7d',
+      granularity: 'day',
+    });
+
+    expect(response.earnings).toHaveLength(3);
+    expect(response.earnings.every((item) => item.source === 'mock')).toBe(true);
+    expect(response.history.series).toHaveLength(2);
+    expect(response.dataQuality.mockEnabled).toBe(true);
+    expect(response.dataQuality.mockedSections).toEqual(
+      expect.arrayContaining(['earnings', 'earningsHistory']),
+    );
+  });
+
+  it('returns empty claimables by default without mock rows', async () => {
+    const previousMockFallback = process.env['PORTFOLIO_MOCK_FALLBACK'];
+    process.env['PORTFOLIO_MOCK_FALLBACK'] = 'true';
+    const { service } = await createService();
+
+    try {
+      const response = await service.getClaimables('0xABCDEF0000000000000000000000000000000001');
+
+      expect(response).toEqual({
+        walletAddress: '0xabcdef0000000000000000000000000000000001',
+        items: [],
+        page: {
+          limit: 20,
+          nextCursor: null,
+          hasMore: false,
+        },
+      });
+    } finally {
+      if (previousMockFallback === undefined) {
+        delete process.env['PORTFOLIO_MOCK_FALLBACK'];
+      } else {
+        process.env['PORTFOLIO_MOCK_FALLBACK'] = previousMockFallback;
+      }
+    }
+  });
+
+  it('preserves explicit includeMock claimables fixture mode for FE sandbox only', async () => {
+    const { service } = await createService();
+
+    const response = await service.getClaimables('0xABCDEF0000000000000000000000000000000001', {
+      includeMock: true,
+      limit: 2,
+    });
+
+    expect(response.items).toHaveLength(2);
+    expect(response.items.every((item) => item.source === 'mock')).toBe(true);
+    expect(response.items.every((item) => !item.action.enabled)).toBe(true);
+    expect(response.page).toEqual({
+      limit: 2,
+      nextCursor: '2',
+      hasMore: true,
+    });
   });
 
   it('returns paginated mock claimables and activities for lazy FE sections', async () => {

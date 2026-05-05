@@ -264,6 +264,10 @@ function shouldIncludeMock(options?: PortfolioQueryOptions): boolean {
   return options?.includeMock === true || envMockEnabled();
 }
 
+function explicitMockRequested(options?: PortfolioQueryOptions): boolean {
+  return options?.includeMock === true;
+}
+
 function clampLimit(limit?: number): number {
   if (!Number.isFinite(limit) || limit === undefined) {
     return DEFAULT_LIMIT;
@@ -680,7 +684,7 @@ export class PortfolioService {
 
   async getPortfolio(address: string, options?: PortfolioQueryOptions): Promise<PortfolioResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = shouldIncludeMock(options);
+    const includeSandboxMock = explicitMockRequested(options);
     const [livePositions, liveMarket, requestRows] = await Promise.all([
       this.contractReader.getPortfolioPositions(normalizedAddress),
       this.contractReader.getMarketState(),
@@ -692,46 +696,46 @@ export class PortfolioService {
     const realPendingRequests = requestRows
       .filter((row) => mapRequestStatus(row.status) === 'pending')
       .map((row) => toPortfolioRequestDto(row, liveMarket.address, marketSymbol));
-    const pendingRequests = realPendingRequests.length > 0 ? realPendingRequests : includeMock ? mockRequests(liveMarket.address) : [];
-    const claimableItems = includeMock ? mockClaimableItems(liveMarket.address).slice(0, OVERVIEW_CLAIMABLE_LIMIT) : [];
+    const pendingRequests = realPendingRequests.length > 0 ? realPendingRequests : includeSandboxMock ? mockRequests(liveMarket.address) : [];
+    const claimableItems = includeSandboxMock ? mockClaimableItems(liveMarket.address).slice(0, OVERVIEW_CLAIMABLE_LIMIT) : [];
     const recentActivities = indexedActivities.length > 0
       ? indexedActivities.slice(0, OVERVIEW_ACTIVITY_LIMIT)
-      : includeMock
+      : includeSandboxMock
         ? mockActivities(liveMarket.address).slice(0, OVERVIEW_ACTIVITY_LIMIT)
         : [];
-    const recentActivitiesSource = indexedActivities.length > 0 ? 'db' : includeMock ? 'mock' : 'unavailable';
-    const claimableAmount = includeMock ? sumClaimables(claimableItems) : '0';
+    const recentActivitiesSource = indexedActivities.length > 0 ? 'db' : includeSandboxMock ? 'mock' : 'unavailable';
+    const claimableAmount = includeSandboxMock ? sumClaimables(claimableItems) : '0';
 
     return {
       walletAddress: normalizedAddress,
       summary: {
         totalValue: totalValue.toString(),
         totalValueChange: {
-          amount: includeMock ? '4230400000000000000' : '0',
-          percent: includeMock ? '0.02' : '0',
-          source: includeMock ? 'mock' : 'placeholder',
+          amount: includeSandboxMock ? '4230400000000000000' : '0',
+          percent: includeSandboxMock ? '0.02' : '0',
+          source: includeSandboxMock ? 'mock' : 'unavailable',
         },
-        currentEarning: includeMock ? '6420750000000000000' : '0',
-        currentEarningSource: includeMock ? 'mock' : 'placeholder',
-        earning30d: includeMock ? '980500000000000000' : '0',
-        earning30dSource: includeMock ? 'mock' : 'placeholder',
+        currentEarning: includeSandboxMock ? '6420750000000000000' : '0',
+        currentEarningSource: includeSandboxMock ? 'mock' : 'unavailable',
+        earning30d: includeSandboxMock ? '980500000000000000' : '0',
+        earning30dSource: includeSandboxMock ? 'mock' : 'unavailable',
         claimable: {
           amount: claimableAmount,
           token: 'USDC',
-          source: includeMock ? 'mock' : 'placeholder',
+          source: includeSandboxMock ? 'mock' : 'unavailable',
         },
       },
       positions: livePositions.map((position) => toPortfolioPositionDto(position, totalValue)),
       portfolioMetrics: {
         totalValue: totalValue.toString(),
-        netApy: includeMock ? '0.0425' : '0',
-        netApySource: includeMock ? 'mock' : 'placeholder',
+        netApy: includeSandboxMock ? '0.0425' : '0',
+        netApySource: includeSandboxMock ? 'mock' : 'unavailable',
       },
       claimableItems,
       pendingRequests: pendingRequests.slice(0, OVERVIEW_PENDING_LIMIT),
       recentActivities,
-      dataQuality: dataQuality(includeMock, recentActivitiesSource),
-      links: links(normalizedAddress, includeMock),
+      dataQuality: dataQuality(includeSandboxMock, recentActivitiesSource),
+      links: links(normalizedAddress, includeSandboxMock),
     };
   }
 
@@ -757,7 +761,7 @@ export class PortfolioService {
 
   async getEarnings(address: string, options?: PortfolioEarningsOptions): Promise<PortfolioEarningsResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = shouldIncludeMock(options);
+    const includeMock = explicitMockRequested(options);
     const liveMarket = await this.contractReader.getMarketState();
     const range = options?.range ?? '30d';
     const granularity = options?.granularity ?? 'day';
@@ -772,7 +776,7 @@ export class PortfolioService {
 
   async getClaimables(address: string, options?: PortfolioListOptions): Promise<PortfolioClaimablesResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = shouldIncludeMock(options);
+    const includeMock = explicitMockRequested(options);
     const liveMarket = await this.contractReader.getMarketState();
     const page = paginate(includeMock ? mockClaimableItems(liveMarket.address) : [], options);
 

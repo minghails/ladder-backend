@@ -13,11 +13,11 @@ Read first:
 3. `backend/docs/HANDOFF.md`
 4. `backend/docs/plans/2026-05-05-live-data-cutover-mock-backed-endpoints.md`
 5. `backend/docs/initiatives/live-data-cutover-mock-backed-endpoints/tracker.md`
-6. `backend/docs/initiatives/live-data-cutover-mock-backed-endpoints/epics/2026-05-05-epic-1-portfolio-mock-cutover.md`
-7. Latest relevant session log only if tracker names it or tracker lacks context.
+6. `backend/docs/initiatives/live-data-cutover-mock-backed-endpoints/epics/2026-05-05-epic-2-market-charts-mock-cutover.md`
+7. `backend/docs/initiatives/live-data-cutover-mock-backed-endpoints/sessions/2026-05-05-epic-1-slice-3-portfolio-overview.md`
 
-Active slice: Epic 1 Slice 1 — Portfolio earnings default unavailable.
-Latest session log: none.
+Active slice: Epic 2 Slice 1 — Yield and utilization charts return unavailable.
+Latest session log: `backend/docs/initiatives/live-data-cutover-mock-backed-endpoints/sessions/2026-05-05-epic-1-slice-3-portfolio-overview.md`.
 
 Rules:
 - Stay within plan scope.
@@ -56,9 +56,9 @@ Follow `backend/docs/HANDOFF.md`. Do not scan unrelated plans/initiatives. Work 
 ## Active first slice
 
 - Plan: `backend/docs/plans/2026-05-05-live-data-cutover-mock-backed-endpoints.md`
-- Epic: `backend/docs/initiatives/live-data-cutover-mock-backed-endpoints/epics/2026-05-05-epic-1-portfolio-mock-cutover.md`
-- Slice: Epic 1 Slice 1 — Portfolio earnings default unavailable
-- Latest session log: none
+- Epic: `backend/docs/initiatives/live-data-cutover-mock-backed-endpoints/epics/2026-05-05-epic-2-market-charts-mock-cutover.md`
+- Slice: Epic 2 Slice 1 — Yield and utilization charts return unavailable
+- Latest session log: `backend/docs/initiatives/live-data-cutover-mock-backed-endpoints/sessions/2026-05-05-epic-1-slice-3-portfolio-overview.md`
 
 ## Session rules
 

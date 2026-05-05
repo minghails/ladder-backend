@@ -2,10 +2,10 @@
 
 ## Active
 
-- Epic: Epic 1 — Portfolio Mock Cutover
-- Slice: Epic 1 Slice 1 — Portfolio earnings default unavailable
+- Epic: Epic 2 — Market Charts Mock Cutover
+- Slice: Epic 2 Slice 1 — Yield and utilization charts return unavailable
 - Session kickoff: `backend/docs/initiatives/live-data-cutover-mock-backed-endpoints/session-kickoff-prompt.md`
-- Latest session: None.
+- Latest session: `backend/docs/initiatives/live-data-cutover-mock-backed-endpoints/sessions/2026-05-05-epic-1-slice-3-portfolio-overview.md`.
 
 ## Active plan
 
@@ -24,12 +24,16 @@
 
 ## Next Up
 
-1. Epic 1 Slice 1 — Portfolio earnings default unavailable.
+1. Epic 2 Slice 1 — Yield and utilization charts return unavailable.
 
 ## Done
 
 - Initiative generated from plan.
 - Epics and bounded slices generated from plan scope.
+- Epic 1 Slice 1 — Portfolio earnings default unavailable.
+- Epic 1 Slice 2 — Portfolio claimables default empty.
+- Epic 1 Slice 3 — Portfolio overview unavailable aggregates.
+- Architecture docs checked; no update needed.
 
 ## Blocked
 
@@ -61,4 +65,7 @@
 
 ## Recently Updated
 
+- 2026-05-05: Epic 1 completed portfolio earnings, claimables, and overview unavailable/mock cutover. API impact: `API data-source/behavior change`; FE should review portfolio empty states/source-label copy and branches on `placeholder` vs `unavailable`. Architecture docs checked; no update needed. Latest session: `backend/docs/initiatives/live-data-cutover-mock-backed-endpoints/sessions/2026-05-05-epic-1-slice-3-portfolio-overview.md`. Next: Epic 2 Slice 1 — Yield and utilization charts return unavailable.
+- 2026-05-05: Epic 1 Slice 2 completed portfolio claimables default empty cutover. API impact: `API data-source/behavior change`; FE should review claimables empty-state copy. Architecture docs checked; no update needed. Latest session: `backend/docs/initiatives/live-data-cutover-mock-backed-endpoints/sessions/2026-05-05-epic-1-slice-2-portfolio-claimables.md`. Next: Epic 1 Slice 3 — Portfolio overview unavailable aggregates.
+- 2026-05-05: Epic 1 Slice 1 completed portfolio earnings default unavailable cutover. API impact: `API data-source/behavior change`; FE should review earnings empty state/source-label copy. Architecture docs checked; no update needed. Latest session: `backend/docs/initiatives/live-data-cutover-mock-backed-endpoints/sessions/2026-05-05-epic-1-slice-1-portfolio-earnings.md`. Next: Epic 1 Slice 2 — Portfolio claimables default empty.
 - 2026-05-05: Initiative activated from `backend/docs/plans/2026-05-05-live-data-cutover-mock-backed-endpoints.md`. Epics/slices generated. Next: Epic 1 Slice 1 — Portfolio earnings default unavailable.
