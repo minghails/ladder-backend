@@ -113,14 +113,57 @@ No epic is active until user requests activation/execution.
 ```markdown
 # Session Kickoff — <Plan Title>
 
+## Copy-paste prompt for next agent
+
+```text
+Follow `backend/docs/HANDOFF.md`.
+Do not scan unrelated plans/initiatives.
+Work one bounded slice only.
+
+Read first:
+1. Root `AGENTS.md`
+2. Root `docs/canonical/SUMMARY.md`
+3. `backend/docs/HANDOFF.md`
+4. `backend/docs/plans/YYYY-MM-DD-<plan-slug>.md`
+5. `backend/docs/initiatives/<plan-slug>/tracker.md`
+6. <exact active epic path, or active epic named by tracker>
+7. Latest relevant session log only if tracker names it or tracker lacks context.
+
+Active slice: <exact active slice, or initiative complete status>.
+Latest session log: <path or none>.
+
+Rules:
+- Stay within plan scope.
+- Do not implement beyond active slice unless explicitly requested.
+- Use TDD when implementation changes behavior: failing test first, minimal implementation, passing test.
+- Do not pull future-phase scope forward.
+- Do not create backend behavior not supported by deployed contract surface.
+- Before marking done, apply architecture doc sync rules from `backend/docs/HANDOFF.md`.
+- Classify FE API impact using `backend/docs/HANDOFF.md`.
+- Write session log under `sessions/`, update tracker, and keep this copy-paste prompt current.
+
+Completion report required:
+- files changed
+- docs changed
+- API impact for FE
+- verification run
+- remaining risks
+- next step
+```
+
+## First response instructions
+
+Follow `backend/docs/HANDOFF.md`. Do not scan unrelated plans/initiatives. Work one bounded slice only.
+
 ## Read first
 
 1. Root `AGENTS.md`
 2. Root `docs/canonical/SUMMARY.md`
-3. `backend/docs/plans/YYYY-MM-DD-<plan-slug>.md`
-4. `backend/docs/initiatives/<plan-slug>/tracker.md`
-5. Active epic contract, if any
-6. Latest relevant session log only if tracker lacks context
+3. `backend/docs/HANDOFF.md`
+4. `backend/docs/plans/YYYY-MM-DD-<plan-slug>.md`
+5. `backend/docs/initiatives/<plan-slug>/tracker.md`
+6. Active epic contract, if any
+7. Latest relevant session log only if tracker lacks context
 
 ## Session rules
 
@@ -130,6 +173,7 @@ No epic is active until user requests activation/execution.
 - Do not create backend behavior not supported by deployed contract surface.
 - Record verification evidence before marking done.
 - Before marking done, apply backend architecture doc sync from `backend/docs/HANDOFF.md`.
+- Keep `## Copy-paste prompt for next agent` current: exact active epic, active slice, latest relevant session log, and next action.
 ```
 
 ### `architecture.md`

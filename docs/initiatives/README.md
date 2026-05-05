@@ -92,6 +92,7 @@ When creating an initiative from a plan:
 7. Do not split epics until the user explicitly asks to activate/execute the plan.
 8. Keep generated tracker state empty unless activation is requested.
 9. If the plan changes API, schema, smart contract event handling, or integration rules, note that matching root canonical docs must be updated during execution.
+10. Always write `session-kickoff-prompt.md` with a top `## Copy-paste prompt for next agent` section containing one complete fenced `text` prompt that can be copied directly into a new agent session. The prompt must include HANDOFF rule, no unrelated scan rule, one bounded slice rule, read order, exact active epic/slice or completion status, latest session log, session rules, and required completion report fields.
 
 ## Initiative lifecycle
 
