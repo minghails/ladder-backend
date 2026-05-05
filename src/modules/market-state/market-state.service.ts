@@ -214,17 +214,6 @@ function toMarketDetail(live: LiveMarketState): MarketDetailDto {
   };
 }
 
-function chartTimestamps(): string[] {
-  return [
-    '2026-04-01T00:00:00.000Z',
-    '2026-04-07T00:00:00.000Z',
-    '2026-04-13T00:00:00.000Z',
-    '2026-04-19T00:00:00.000Z',
-    '2026-04-25T00:00:00.000Z',
-    '2026-04-30T00:00:00.000Z',
-  ];
-}
-
 @Injectable()
 export class MarketStateService {
   constructor(
@@ -391,22 +380,20 @@ export class MarketStateService {
         },
       };
     }
-    const timestamps = chartTimestamps();
-
     return {
       market: live.address,
       metric,
       range,
       headline: {
         label: fixture.label,
-        value: fixture.value,
+        value: '0',
         unit: fixture.unit,
-        source: 'mock',
+        source: 'unavailable',
       },
-      series: fixture.values.map((value, index) => ({ timestamp: timestamps[index], value, source: 'mock' })),
+      series: [],
       dataQuality: {
         sources: {
-          series: 'mock',
+          series: 'unavailable',
         },
       },
     };

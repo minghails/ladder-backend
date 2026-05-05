@@ -324,8 +324,8 @@ describe('MarketStateService', () => {
     expect(factsheet.dataQuality.sources.factsheet).toBe('config');
   });
 
-  it('returns deterministic chart payloads with mock-labelled sources', async () => {
-    const { service } = await createService();
+  it('returns unavailable empty yield chart instead of mock fixtures', async () => {
+    const { service } = await createService(LIVE_MARKET, []);
 
     const chart = await service.getChart(LIVE_MARKET.address, 'yield', '30d');
 
@@ -335,20 +335,27 @@ describe('MarketStateService', () => {
       range: '30d',
       headline: {
         label: 'Yield APY',
-        value: '8.40',
+        value: '0',
         unit: '%',
-        source: 'mock',
+        source: 'unavailable',
       },
+      series: [],
       dataQuality: {
         sources: {
-          series: 'mock',
+          series: 'unavailable',
         },
       },
     });
-    expect(chart.series).toHaveLength(6);
-    expect(chart.series[0]).toHaveProperty('timestamp');
-    expect(chart.series[0]).toHaveProperty('value');
-    expect(chart.series[0]).toHaveProperty('source', 'mock');
+  });
+
+  it('returns unavailable empty utilization chart instead of mock fixtures', async () => {
+    const { service } = await createService(LIVE_MARKET, []);
+
+    const chart = await service.getChart(LIVE_MARKET.address, 'utilization', '30d');
+
+    expect(chart.headline.source).toBe('unavailable');
+    expect(chart.series).toEqual([]);
+    expect(chart.dataQuality.sources.series).toBe('unavailable');
   });
 
   it.each([
@@ -407,15 +414,6 @@ describe('MarketStateService', () => {
     });
     expect(chart.series).toEqual([]);
     expect(chart.dataQuality.sources.series).toBe('indexed_events');
-  });
-
-  it('keeps utilization charts mock-backed until utilization projection exists', async () => {
-    const { service } = await createService(LIVE_MARKET, [snapshotRow()]);
-
-    const chart = await service.getChart(LIVE_MARKET.address, 'utilization', '30d');
-
-    expect(chart.headline.source).toBe('mock');
-    expect(chart.series[0]?.source).toBe('mock');
   });
 
   it('returns paginated indexed market history', async () => {

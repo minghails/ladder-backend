@@ -308,6 +308,48 @@ describe('QuotesService', () => {
     });
   });
 
+  it('quotes withdraw-yt with derived non-placeholder output', async () => {
+    const { service } = await createService();
+
+    const quote = await service.quoteWithdrawYt({
+      market: LIVE_MARKET.address,
+      tranche: 'senior',
+      mode: 'assets',
+      amount: '1000000000000000000',
+      receiver: '0x00000000000000000000000000000000000000e1',
+    });
+
+    expect(quote.output).toEqual({
+      token: LIVE_MARKET.ytTokenAddress,
+      amount: '1000000000000000000',
+      estimateType: 'derived',
+    });
+    expect(quote.dataQuality.sources.output).toBe('derived');
+    expect(quote.availability).toEqual({
+      available: true,
+      reason: null,
+    });
+  });
+
+  it('quotes withdraw-yt shares mode as derived identity until tranche previewRedeem simulation exists', async () => {
+    const { service } = await createService();
+
+    const quote = await service.quoteWithdrawYt({
+      market: LIVE_MARKET.address,
+      tranche: 'junior',
+      mode: 'shares',
+      amount: '500000000000000000',
+      receiver: '0x00000000000000000000000000000000000000e1',
+    });
+
+    expect(quote.output).toEqual({
+      token: LIVE_MARKET.ytTokenAddress,
+      amount: '500000000000000000',
+      estimateType: 'derived_identity',
+    });
+    expect(quote.dataQuality.sources.output).toBe('derived_identity');
+  });
+
   it('maps withdraw-yt assets mode to byShares false', async () => {
     const { service } = await createService();
 

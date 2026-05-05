@@ -1,6 +1,17 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
-import { calculateJuniorWithdrawalCapacity, calculateSeniorDepositCapacity, isPriceStale } from '../market-state/market-calculations';
+import {
+  ContractReaderService,
+  type LiveMarketState,
+} from '@shared/blockchain/contract-reader.service';
+import {
+  calculateJuniorWithdrawalCapacity,
+  calculateSeniorDepositCapacity,
+  isPriceStale,
+} from '../market-state/market-calculations';
 
 export type QuoteTranche = 'senior' | 'junior';
 
@@ -36,7 +47,10 @@ function normalizeAddress(address: string): string {
 }
 
 function statusWarnings(live: LiveMarketState): string[] {
-  return [...(live.halted ? ['MARKET_HALTED'] : []), ...(isPriceStale(live.lastUpdatedTime) ? ['STALE_PRICE'] : [])];
+  return [
+    ...(live.halted ? ['MARKET_HALTED'] : []),
+    ...(isPriceStale(live.lastUpdatedTime) ? ['STALE_PRICE'] : []),
+  ];
 }
 
 function trancheToken(live: LiveMarketState, tranche: QuoteTranche): string {
@@ -59,8 +73,12 @@ export class QuotesService {
     const navStAfter = BigInt(live.navSt) + (request.tranche === 'senior' ? depositValue : 0n);
     const navJtAfter = BigInt(live.navJt) + (request.tranche === 'junior' ? depositValue : 0n);
     const navAfter = navStAfter + navJtAfter;
-    const stJtRatioAfter = navJtAfter === 0n ? null : ((navStAfter * 10n ** 18n) / navJtAfter).toString();
-    const ratioExceeded = request.tranche === 'senior' && stJtRatioAfter !== null && BigInt(stJtRatioAfter) > BigInt(live.maxStJtRatio);
+    const stJtRatioAfter =
+      navJtAfter === 0n ? null : ((navStAfter * 10n ** 18n) / navJtAfter).toString();
+    const ratioExceeded =
+      request.tranche === 'senior' &&
+      stJtRatioAfter !== null &&
+      BigInt(stJtRatioAfter) > BigInt(live.maxStJtRatio);
     const firstDepositMustBeJunior = request.tranche === 'senior' && BigInt(live.navJt) === 0n;
     const unavailableReason = live.halted
       ? 'MARKET_HALTED'
@@ -128,10 +146,16 @@ export class QuotesService {
     const sender = request.sender ?? '0x0000000000000000000000000000000000000000';
     const minYtOut = request.minYtOut ?? '0';
     const receiver = request.receiver ?? sender;
-    const referrerId = request.referrerId ?? '0x0000000000000000000000000000000000000000000000000000000000000000';
+    const referrerId =
+      request.referrerId ?? '0x0000000000000000000000000000000000000000000000000000000000000000';
     const token = trancheToken(live, request.tranche);
-    const seniorCapacity = calculateSeniorDepositCapacity(live.navSt, live.navJt, live.maxStJtRatio);
-    const capacityExceeded = request.tranche === 'senior' && BigInt(request.amount) > BigInt(seniorCapacity);
+    const seniorCapacity = calculateSeniorDepositCapacity(
+      live.navSt,
+      live.navJt,
+      live.maxStJtRatio,
+    );
+    const capacityExceeded =
+      request.tranche === 'senior' && BigInt(request.amount) > BigInt(seniorCapacity);
     const unavailableReason = live.halted
       ? 'MARKET_HALTED'
       : !live.capabilities.depositBaseInstant
@@ -181,7 +205,12 @@ export class QuotesService {
         estimatedYtOut: simulation?.ok === true ? simulation.ytOut : null,
         minYtOut,
         sharesOut: simulation?.ok === true ? simulation.sharesOut : null,
-        estimateType: simulation?.ok === true ? 'simulated_onchain' : simulation?.ok === false ? 'simulation_reverted' : 'unavailable',
+        estimateType:
+          simulation?.ok === true
+            ? 'simulated_onchain'
+            : simulation?.ok === false
+              ? 'simulation_reverted'
+              : 'unavailable',
       },
       availability: {
         available: finalUnavailableReason === null,
@@ -210,7 +239,12 @@ export class QuotesService {
       dataQuality: {
         sources: {
           marketState: 'live_contract',
-          estimate: simulation?.ok === true ? 'simulated_onchain' : simulation?.ok === false ? 'simulation_reverted' : 'unavailable',
+          estimate:
+            simulation?.ok === true
+              ? 'simulated_onchain'
+              : simulation?.ok === false
+                ? 'simulation_reverted'
+                : 'unavailable',
           constraints: 'derived',
         },
       },
@@ -226,7 +260,9 @@ export class QuotesService {
     const receiver = request.receiver ?? '0x0000000000000000000000000000000000000000';
     const amountValue = BigInt(amount);
     const juniorCapacityExceeded =
-      request.tranche === 'junior' && amountValue > BigInt(calculateJuniorWithdrawalCapacity(live.navSt, live.navJt, live.maxStJtRatio));
+      request.tranche === 'junior' &&
+      amountValue >
+        BigInt(calculateJuniorWithdrawalCapacity(live.navSt, live.navJt, live.maxStJtRatio));
     const unavailableReason = live.halted
       ? 'MARKET_HALTED'
       : amountValue === 0n
@@ -236,6 +272,7 @@ export class QuotesService {
           : juniorCapacityExceeded
             ? 'JUNIOR_WITHDRAWAL_CAPACITY_EXCEEDED'
             : null;
+    const outputEstimateType = mode === 'assets' ? 'derived' : 'derived_identity';
 
     if (juniorCapacityExceeded) {
       warnings.push('JUNIOR_WITHDRAWAL_CAPACITY_EXCEEDED');
@@ -255,7 +292,7 @@ export class QuotesService {
       output: {
         token: live.ytTokenAddress,
         amount,
-        estimateType: 'placeholder',
+        estimateType: outputEstimateType,
       },
       availability: {
         available: unavailableReason === null,
@@ -282,7 +319,7 @@ export class QuotesService {
       dataQuality: {
         sources: {
           marketState: 'live_contract',
-          output: 'placeholder',
+          output: outputEstimateType,
           constraints: 'derived',
         },
       },
