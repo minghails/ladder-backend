@@ -216,6 +216,9 @@ class TradeTokenDto {
 
 class TradeTokensDto {
   @ApiProperty({ type: TradeTokenDto })
+  yt!: TradeTokenDto;
+
+  @ApiProperty({ type: TradeTokenDto })
   base!: TradeTokenDto;
 
   @ApiProperty({ type: TradeTokenDto })
@@ -225,20 +228,71 @@ class TradeTokensDto {
   junior!: TradeTokenDto;
 }
 
+class TradeApprovalDto {
+  @ApiProperty({ description: 'Token to approve.', example: '0x00000000000000000000000000000000000000b1' })
+  token!: string;
+
+  @ApiProperty({ description: 'Market spender for approval.', example: '0x3aDa769dC813e3376fCD40d05bEA12263048A487' })
+  spender!: string;
+}
+
+class TradeApprovalsDto {
+  @ApiProperty({ type: TradeApprovalDto })
+  depositYt!: TradeApprovalDto;
+
+  @ApiProperty({ type: TradeApprovalDto })
+  depositBaseInstant!: TradeApprovalDto;
+
+  @ApiProperty({ type: TradeApprovalDto })
+  withdrawSenior!: TradeApprovalDto;
+
+  @ApiProperty({ type: TradeApprovalDto })
+  withdrawJunior!: TradeApprovalDto;
+}
+
+class TradeMethodsDto {
+  @ApiProperty({ example: 'depositYT' })
+  depositYt!: string;
+
+  @ApiProperty({ example: 'depositInstant' })
+  depositBaseInstant!: string;
+
+  @ApiProperty({ example: 'withdraw' })
+  withdrawYt!: string;
+}
+
 class TradeLimitsDto {
   @ApiProperty({ description: 'Raw senior deposit capacity.', example: '30000000000000000000000000' })
   seniorDepositCapacity!: string;
 
   @ApiProperty({ description: 'Raw junior withdrawal capacity where safely expressible.', example: '5000000000000000000000000' })
   juniorWithdrawalCapacity!: string;
+
+  @ApiProperty({ description: 'Raw senior deposit capacity denominated in YT at current 1e18-scaled price assumptions.', example: '30000000000000000000000000' })
+  seniorDepositCapacityYt!: string;
+
+  @ApiProperty({ description: 'Raw junior withdrawal capacity denominated in YT at current 1e18-scaled price assumptions.', example: '5000000000000000000000000' })
+  juniorWithdrawalCapacityYt!: string;
+
+  @ApiProperty({ description: 'Raw max ST/JT ratio, 1e18-scaled.', example: '6000000000000000000' })
+  maxStJtRatio!: string;
+
+  @ApiProperty({ description: 'Raw current ST/JT ratio, 1e18-scaled.', example: '3000000000000000000' })
+  currentStJtRatio!: string;
 }
 
 export class MarketTradeConstraintsResponseDto {
   @ApiProperty({ description: 'Market address.', example: '0x3aDa769dC813e3376fCD40d05bEA12263048A487' })
   market!: string;
 
-  @ApiProperty({ description: 'Base, Senior, and Junior token metadata.', type: TradeTokensDto })
+  @ApiProperty({ description: 'YT, base, Senior, and Junior token metadata.', type: TradeTokensDto })
   tokens!: TradeTokensDto;
+
+  @ApiProperty({ description: 'Approval token/spender pairs for FE wagmi forms.', type: TradeApprovalsDto })
+  approvals!: TradeApprovalsDto;
+
+  @ApiProperty({ description: 'Market method names for FE wagmi writes.', type: TradeMethodsDto })
+  methods!: TradeMethodsDto;
 
   @ApiProperty({ description: 'Market/adaptor capability flags.', type: MarketCapabilitiesDto })
   capabilities!: MarketCapabilitiesDto;

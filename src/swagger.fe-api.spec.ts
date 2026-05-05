@@ -7,6 +7,7 @@ import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/
 import { MarketStateModule } from './modules/market-state/market-state.module';
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
 import { QuotesModule } from './modules/quotes/quotes.module';
+import { TxStatusModule } from './modules/tx-status/tx-status.module';
 
 function createFeApiDocument(app: INestApplication): OpenAPIObject {
   const config = new DocumentBuilder()
@@ -45,7 +46,7 @@ const LIVE_MARKET: LiveMarketState = {
 describe('FE-ready Swagger documentation', () => {
   async function createDocument() {
     const module = await Test.createTestingModule({
-      imports: [MarketStateModule, PortfolioModule, QuotesModule],
+      imports: [MarketStateModule, PortfolioModule, QuotesModule, TxStatusModule],
     })
       .overrideProvider(ContractReaderService)
       .useValue({
@@ -111,10 +112,24 @@ describe('FE-ready Swagger documentation', () => {
     expect(withdrawYt?.summary).toBe('Quote YT withdrawal');
     expect(withdrawYt?.description).toContain('never includes raw calldata');
 
+    const depositYt = document.paths['/quotes/deposit-yt']?.post;
+    expect(depositYt?.summary).toBe('Quote direct YT deposit');
+    expect(depositYt?.description).toContain('never includes raw calldata');
+
     const actionSchema = document.components?.schemas?.QuoteActionDto as SchemaObject | undefined;
     const calldataIncluded = actionSchema?.properties?.calldataIncluded as SchemaObject | undefined;
     expect(calldataIncluded?.description).toContain('Always false');
     expect(calldataIncluded?.example).toBe(false);
+  });
+
+  it('documents tx status endpoint backed by indexed events', async () => {
+    const document = await createDocument();
+
+    const txStatus = document.paths['/tx/{hash}']?.get;
+    expect(txStatus?.summary).toBe('Get indexed transaction status');
+    expect(txStatus?.description).toContain('indexed market events');
+    expect(txStatus?.description).toContain('does not sign, submit, or generate transaction calldata');
+    expect(txStatus?.parameters?.some((parameter) => 'name' in parameter && parameter.name === 'hash')).toBe(true);
   });
 
   it('documents portfolio endpoints with wallet parameters, mock controls, pagination, and split response schemas', async () => {

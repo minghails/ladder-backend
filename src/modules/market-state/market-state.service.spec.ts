@@ -248,7 +248,7 @@ describe('MarketStateService', () => {
     });
   });
 
-  it('returns thin trade constraints without UI-only wallet state', async () => {
+  it('returns FE trade constraints with tokens, approvals, methods, capabilities, limits, and warnings', async () => {
     const { service } = await createService();
 
     const constraints = await service.getTradeConstraints(LIVE_MARKET.address);
@@ -256,9 +256,21 @@ describe('MarketStateService', () => {
     expect(constraints).toMatchObject({
       market: LIVE_MARKET.address,
       tokens: {
+        yt: { symbol: 'mEDGE', address: LIVE_MARKET.ytTokenAddress, decimals: 18 },
         base: { symbol: 'USDC', address: LIVE_MARKET.baseTokenAddress, decimals: 6 },
         senior: { symbol: 'st-mEDGE', address: LIVE_MARKET.seniorTrancheAddress, decimals: 18 },
         junior: { symbol: 'jt-mEDGE', address: LIVE_MARKET.juniorTrancheAddress, decimals: 18 },
+      },
+      approvals: {
+        depositYt: { token: LIVE_MARKET.ytTokenAddress, spender: LIVE_MARKET.address },
+        depositBaseInstant: { token: LIVE_MARKET.baseTokenAddress, spender: LIVE_MARKET.address },
+        withdrawSenior: { token: LIVE_MARKET.seniorTrancheAddress, spender: LIVE_MARKET.address },
+        withdrawJunior: { token: LIVE_MARKET.juniorTrancheAddress, spender: LIVE_MARKET.address },
+      },
+      methods: {
+        depositYt: 'depositYT',
+        depositBaseInstant: 'depositInstant',
+        withdrawYt: 'withdraw',
       },
       capabilities: {
         depositYt: true,
@@ -270,6 +282,10 @@ describe('MarketStateService', () => {
       limits: {
         seniorDepositCapacity: '30000000000000000000000000',
         juniorWithdrawalCapacity: '5000000000000000000000000',
+        seniorDepositCapacityYt: '30000000000000000000000000',
+        juniorWithdrawalCapacityYt: '5000000000000000000000000',
+        maxStJtRatio: LIVE_MARKET.maxStJtRatio,
+        currentStJtRatio: LIVE_MARKET.currentStJtRatio,
       },
       settlement: {
         depositBaseInstant: 'Instant when adaptor liquidity is available',
@@ -280,6 +296,8 @@ describe('MarketStateService', () => {
       dataQuality: {
         sources: {
           tokens: 'live_contract',
+          approvals: 'derived',
+          methods: 'contract_abi',
           capabilities: 'live_contract',
           limits: 'derived',
           settlement: 'config',

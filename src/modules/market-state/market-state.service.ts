@@ -295,9 +295,21 @@ export class MarketStateService {
     return {
       market: live.address,
       tokens: {
+        yt: { symbol: stripTranchePrefix(live.seniorSymbol), address: live.ytTokenAddress, decimals: 18 },
         base: { symbol: 'USDC', address: live.baseTokenAddress, decimals: 6 },
         senior: { symbol: live.seniorSymbol, address: live.seniorTrancheAddress, decimals: 18 },
         junior: { symbol: live.juniorSymbol, address: live.juniorTrancheAddress, decimals: 18 },
+      },
+      approvals: {
+        depositYt: { token: live.ytTokenAddress, spender: live.address },
+        depositBaseInstant: { token: live.baseTokenAddress, spender: live.address },
+        withdrawSenior: { token: live.seniorTrancheAddress, spender: live.address },
+        withdrawJunior: { token: live.juniorTrancheAddress, spender: live.address },
+      },
+      methods: {
+        depositYt: 'depositYT',
+        depositBaseInstant: 'depositInstant',
+        withdrawYt: 'withdraw',
       },
       capabilities: {
         depositYt: !live.halted,
@@ -313,12 +325,18 @@ export class MarketStateService {
       limits: {
         seniorDepositCapacity,
         juniorWithdrawalCapacity,
+        seniorDepositCapacityYt: seniorDepositCapacity,
+        juniorWithdrawalCapacityYt: juniorWithdrawalCapacity,
+        maxStJtRatio: live.maxStJtRatio,
+        currentStJtRatio: live.currentStJtRatio,
       },
       settlement: MARKET_SETTLEMENT_LABELS,
       warnings: statusWarnings(live),
       dataQuality: {
         sources: {
           tokens: 'live_contract',
+          approvals: 'derived',
+          methods: 'contract_abi',
           capabilities: 'live_contract',
           limits: 'derived',
           settlement: 'config',

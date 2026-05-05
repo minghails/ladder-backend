@@ -13,10 +13,10 @@ Read first:
 3. `backend/docs/HANDOFF.md`
 4. `backend/docs/plans/2026-05-05-backend-fe-wagmi-trade-support.md`
 5. `backend/docs/initiatives/backend-fe-wagmi-trade-support/tracker.md`
-6. `backend/docs/initiatives/backend-fe-wagmi-trade-support/epics/2026-05-05-epic-1-quotes-preflight.md`
+6. `backend/docs/initiatives/backend-fe-wagmi-trade-support/sessions/2026-05-05-epic-3-tx-status.md`
 
-Active slice: Epic 2 — Complete trade constraints for FE forms.
-Latest session log: `backend/docs/initiatives/backend-fe-wagmi-trade-support/sessions/2026-05-05-epic-1-complete-quotes-preflight.md`
+Active slice: Epic 4 — Docs, integration checklist, and demo smoke.
+Latest session log: `backend/docs/initiatives/backend-fe-wagmi-trade-support/sessions/2026-05-05-epic-3-tx-status.md`
 
 Rules:
 - Do not implement beyond active slice.
@@ -48,13 +48,13 @@ Follow `backend/docs/HANDOFF.md`. Do not scan unrelated plans/initiatives. Work 
 3. `backend/docs/HANDOFF.md`
 4. `backend/docs/plans/2026-05-05-backend-fe-wagmi-trade-support.md`
 5. `backend/docs/initiatives/backend-fe-wagmi-trade-support/tracker.md`
-6. Active epic file named in tracker
+6. Latest session log named in tracker
 
 ## Active first slice
 
-- Epic: `backend/docs/initiatives/backend-fe-wagmi-trade-support/epics/2026-05-05-epic-1-quotes-preflight.md`
-- Slice: Epic 2 — Complete trade constraints for FE forms
-- Latest session log: `backend/docs/initiatives/backend-fe-wagmi-trade-support/sessions/2026-05-05-epic-1-complete-quotes-preflight.md`
+- Plan: `backend/docs/plans/2026-05-05-backend-fe-wagmi-trade-support.md`
+- Slice: Epic 4 — Docs, integration checklist, and demo smoke
+- Latest session log: `backend/docs/initiatives/backend-fe-wagmi-trade-support/sessions/2026-05-05-epic-3-tx-status.md`
 
 ## Session rules
 
