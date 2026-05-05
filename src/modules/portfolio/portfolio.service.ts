@@ -3,6 +3,7 @@ import { desc, or, eq } from 'drizzle-orm';
 import { ContractReaderService, type LivePortfolioPosition } from '@shared/blockchain/contract-reader.service';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { depositRequests } from '@shared/database/schema';
+import { PortfolioActivityRepository } from './portfolio-activity.repository';
 
 export type PortfolioDataSource = 'live' | 'db' | 'mock' | 'placeholder' | 'unavailable' | 'derived';
 export type PortfolioRequestStatus = 'pending' | 'settled' | 'rejected' | 'refunded';
@@ -97,6 +98,7 @@ export interface PortfolioRequestDto {
   value: string;
   status: PortfolioRequestStatus;
   ladderRequestId: string;
+  adaptorRequestId: string | null;
   txHash: string | null;
   settlement: {
     estimatedAt: string | null;
@@ -332,6 +334,7 @@ function toPortfolioRequestDto(
     value: row.amountIn,
     status: mapRequestStatus(row.status),
     ladderRequestId: row.requestId,
+    adaptorRequestId: row.adaptorRequestId,
     txHash: row.txHash,
     settlement: {
       estimatedAt: null,
@@ -442,6 +445,7 @@ function mockRequests(liveMarketAddress: string): PortfolioRequestDto[] {
       value: '81000000000',
       status: 'pending',
       ladderRequestId: 'mock-request-1',
+      adaptorRequestId: null,
       txHash: null,
       settlement: { estimatedAt: null, note: 'Mock pending queue row for FE integration' },
       source: 'mock',
@@ -456,6 +460,7 @@ function mockRequests(liveMarketAddress: string): PortfolioRequestDto[] {
       value: '42000000000',
       status: 'pending',
       ladderRequestId: 'mock-request-2',
+      adaptorRequestId: null,
       txHash: null,
       settlement: { estimatedAt: null, note: 'Mock pending queue row for FE integration' },
       source: 'mock',
@@ -470,6 +475,7 @@ function mockRequests(liveMarketAddress: string): PortfolioRequestDto[] {
       value: '8800000000',
       status: 'pending',
       ladderRequestId: 'mock-request-3',
+      adaptorRequestId: null,
       txHash: null,
       settlement: { estimatedAt: null, note: 'Mock pending queue row for FE integration' },
       source: 'mock',
@@ -614,33 +620,38 @@ function sumClaimables(items: PortfolioClaimableItemDto[]): string {
   return items.reduce((total, item) => total + BigInt(item.amount), 0n).toString();
 }
 
-function dataQuality(mockEnabled: boolean): PortfolioDataQualityDto {
+function dataQuality(mockEnabled: boolean, recentActivitiesSource: PortfolioDataSource = mockEnabled ? 'mock' : 'unavailable'): PortfolioDataQualityDto {
+  const mockedSections = mockEnabled
+    ? [
+        'summary.totalValueChange',
+        'summary.currentEarning',
+        'summary.earning30d',
+        'summary.claimable',
+        'positions.currentApy',
+        'portfolioMetrics.netApy',
+        'earnings',
+        'earningsHistory',
+        'claimableItems',
+      ]
+    : [];
+
+  if (recentActivitiesSource === 'mock') {
+    mockedSections.push('recentActivities');
+  }
+
   return {
     earningsEstimated: mockEnabled,
     historyAvailable: mockEnabled,
     activityIndexedUntilBlock: null,
     mockEnabled,
-    mockedSections: mockEnabled
-      ? [
-          'summary.totalValueChange',
-          'summary.currentEarning',
-          'summary.earning30d',
-          'summary.claimable',
-          'positions.currentApy',
-          'portfolioMetrics.netApy',
-          'earnings',
-          'earningsHistory',
-          'claimableItems',
-          'recentActivities',
-        ]
-      : [],
+    mockedSections,
     sources: {
       positions: 'live',
       pendingRequests: 'db',
       earnings: mockEnabled ? 'mock' : 'unavailable',
       earningsHistory: mockEnabled ? 'mock' : 'unavailable',
       claimableItems: mockEnabled ? 'mock' : 'unavailable',
-      recentActivities: mockEnabled ? 'mock' : 'unavailable',
+      recentActivities: recentActivitiesSource,
     },
   };
 }
@@ -661,6 +672,7 @@ function links(address: string, includeMock: boolean): PortfolioLinksDto {
 export class PortfolioService {
   constructor(
     private readonly contractReader: ContractReaderService,
+    private readonly activityRepository: PortfolioActivityRepository,
     @Optional()
     @Inject(DRIZZLE_DB)
     private readonly db?: PortfolioDatabase,
@@ -674,13 +686,20 @@ export class PortfolioService {
       this.contractReader.getMarketState(),
       this.readRequests(normalizedAddress),
     ]);
+    const marketSymbol = stripTranchePrefix(liveMarket.seniorSymbol);
+    const indexedActivities = await this.activityRepository.findByWallet(normalizedAddress, marketSymbol);
     const totalValue = sumValues(livePositions);
     const realPendingRequests = requestRows
       .filter((row) => mapRequestStatus(row.status) === 'pending')
-      .map((row) => toPortfolioRequestDto(row, liveMarket.address, stripTranchePrefix(liveMarket.seniorSymbol)));
+      .map((row) => toPortfolioRequestDto(row, liveMarket.address, marketSymbol));
     const pendingRequests = realPendingRequests.length > 0 ? realPendingRequests : includeMock ? mockRequests(liveMarket.address) : [];
     const claimableItems = includeMock ? mockClaimableItems(liveMarket.address).slice(0, OVERVIEW_CLAIMABLE_LIMIT) : [];
-    const recentActivities = includeMock ? mockActivities(liveMarket.address).slice(0, OVERVIEW_ACTIVITY_LIMIT) : [];
+    const recentActivities = indexedActivities.length > 0
+      ? indexedActivities.slice(0, OVERVIEW_ACTIVITY_LIMIT)
+      : includeMock
+        ? mockActivities(liveMarket.address).slice(0, OVERVIEW_ACTIVITY_LIMIT)
+        : [];
+    const recentActivitiesSource = indexedActivities.length > 0 ? 'db' : includeMock ? 'mock' : 'unavailable';
     const claimableAmount = includeMock ? sumClaimables(claimableItems) : '0';
 
     return {
@@ -711,7 +730,7 @@ export class PortfolioService {
       claimableItems,
       pendingRequests: pendingRequests.slice(0, OVERVIEW_PENDING_LIMIT),
       recentActivities,
-      dataQuality: dataQuality(includeMock),
+      dataQuality: dataQuality(includeMock, recentActivitiesSource),
       links: links(normalizedAddress, includeMock),
     };
   }
@@ -768,7 +787,10 @@ export class PortfolioService {
     const normalizedAddress = normalizeAddress(address);
     const includeMock = shouldIncludeMock(options);
     const liveMarket = await this.contractReader.getMarketState();
-    const page = paginate(includeMock ? mockActivities(liveMarket.address) : [], options);
+    const marketSymbol = stripTranchePrefix(liveMarket.seniorSymbol);
+    const indexedActivities = await this.activityRepository.findByWallet(normalizedAddress, marketSymbol);
+    const sourceActivities = indexedActivities.length > 0 ? indexedActivities : includeMock ? mockActivities(liveMarket.address) : [];
+    const page = paginate(sourceActivities, options);
 
     return {
       walletAddress: normalizedAddress,

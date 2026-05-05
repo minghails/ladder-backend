@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
@@ -7,6 +9,7 @@ import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/
 import { MarketStateModule } from './modules/market-state/market-state.module';
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
 import { QuotesModule } from './modules/quotes/quotes.module';
+import { TxStatusModule } from './modules/tx-status/tx-status.module';
 
 function createFeApiDocument(app: INestApplication): OpenAPIObject {
   const config = new DocumentBuilder()
@@ -43,9 +46,13 @@ const LIVE_MARKET: LiveMarketState = {
 };
 
 describe('FE-ready Swagger documentation', () => {
+  function readCanonicalDoc(path: string) {
+    return readFileSync(resolve(__dirname, '..', '..', path), 'utf8');
+  }
+
   async function createDocument() {
     const module = await Test.createTestingModule({
-      imports: [MarketStateModule, PortfolioModule, QuotesModule],
+      imports: [MarketStateModule, PortfolioModule, QuotesModule, TxStatusModule],
     })
       .overrideProvider(ContractReaderService)
       .useValue({
@@ -94,6 +101,7 @@ describe('FE-ready Swagger documentation', () => {
     expect(document.paths['/markets/{address}/deposit-limits']?.get?.summary).toBe('Get market deposit limits');
     expect(document.paths['/markets/{address}/price-status']?.get?.summary).toBe('Get market price freshness status');
     expect(document.paths['/markets/{address}/factsheet']?.get?.summary).toBe('Get market factsheet');
+    expect(document.paths['/markets/{address}/history']?.get?.summary).toBe('Get indexed market history');
     const charts = document.paths['/markets/{address}/charts']?.get;
     expect(charts?.summary).toBe('Get market chart payload');
     expect(charts?.parameters?.some((parameter) => 'name' in parameter && parameter.name === 'metric')).toBe(true);
@@ -110,10 +118,49 @@ describe('FE-ready Swagger documentation', () => {
     expect(withdrawYt?.summary).toBe('Quote YT withdrawal');
     expect(withdrawYt?.description).toContain('never includes raw calldata');
 
+    const depositYt = document.paths['/quotes/deposit-yt']?.post;
+    expect(depositYt?.summary).toBe('Quote direct YT deposit');
+    expect(depositYt?.description).toContain('never includes raw calldata');
+
+    const depositBaseRequestSchema = document.components?.schemas?.DepositBaseQuoteRequestDto as SchemaObject | undefined;
+    const senderProperty = depositBaseRequestSchema?.properties?.sender as SchemaObject | undefined;
+    expect(senderProperty).toBeDefined();
+    expect(senderProperty?.description).toContain('wallet address used as eth_call sender');
+
     const actionSchema = document.components?.schemas?.QuoteActionDto as SchemaObject | undefined;
     const calldataIncluded = actionSchema?.properties?.calldataIncluded as SchemaObject | undefined;
     expect(calldataIncluded?.description).toContain('Always false');
     expect(calldataIncluded?.example).toBe(false);
+
+    const apiContract = readCanonicalDoc('docs/canonical/api-contract.md');
+    expect(apiContract).toContain('estimateType = "simulated_onchain"');
+    expect(apiContract).toContain('sender is required for exact current-block simulation');
+    expect(apiContract).toContain('calldataIncluded = false');
+  });
+
+  it('documents tx status endpoint backed by indexed events', async () => {
+    const document = await createDocument();
+
+    const txStatus = document.paths['/tx/{hash}']?.get;
+    expect(txStatus?.summary).toBe('Get indexed transaction status');
+    expect(txStatus?.description).toContain('indexed market events');
+    expect(txStatus?.description).toContain('does not sign, submit, or generate transaction calldata');
+    expect(txStatus?.parameters?.some((parameter) => 'name' in parameter && parameter.name === 'hash')).toBe(true);
+  });
+
+  it('documents FE wagmi demo smoke checklist in canonical API and integration rules', () => {
+    const apiContract = readCanonicalDoc('docs/canonical/api-contract.md');
+    const integrationRules = readCanonicalDoc('docs/canonical/integration-rules.md');
+
+    expect(apiContract).toContain('## FE wagmi demo smoke checklist');
+    expect(apiContract).toContain('GET /markets/:address/trade-constraints');
+    expect(apiContract).toContain('POST /quotes/deposit-yt');
+    expect(apiContract).toContain('POST /quotes/deposit-base');
+    expect(apiContract).toContain('POST /quotes/withdraw-yt');
+    expect(apiContract).toContain('GET /tx/:hash');
+    expect(apiContract).toContain('calldataIncluded = false');
+    expect(integrationRules).toContain('## FE wagmi transaction flow');
+    expect(integrationRules).toContain('Backend never signs transactions, stores private keys, submits wallet transactions, or returns mandatory calldata');
   });
 
   it('documents portfolio endpoints with wallet parameters, mock controls, pagination, and split response schemas', async () => {

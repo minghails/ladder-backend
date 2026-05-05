@@ -13,6 +13,7 @@ import { QuotesModule } from './modules/quotes/quotes.module';
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
 import { RiskMonitoringModule } from './modules/risk-monitoring/risk-monitoring.module';
 import { AdminOpsModule } from './modules/admin-ops/admin-ops.module';
+import { TxStatusModule } from './modules/tx-status/tx-status.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AdminOpsModule } from './modules/admin-ops/admin-ops.module';
     PortfolioModule,
     RiskMonitoringModule,
     AdminOpsModule,
+    TxStatusModule,
   ],
   controllers: [HealthController],
 })

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { Address } from 'viem';
 import { ViemClientService } from './viem-client.service';
 import {
@@ -46,6 +46,22 @@ export interface LivePortfolioPosition {
   value: string;
 }
 
+export interface SimulateDepositBaseInstantInput {
+  market: string;
+  asSenior: boolean;
+  tokenIn: string;
+  amountIn: string;
+  minYtOut: string;
+  receiver: string;
+  referrerId: string;
+  sender: string;
+  trancheToken: string;
+}
+
+export type SimulateDepositBaseInstantResult =
+  | { ok: true; ytOut: string; sharesOut: string }
+  | { ok: false; reason: string; errorName: string | null };
+
 const SCALE = 10n ** 18n;
 
 function toStringValue(value: bigint | number | string | boolean): string {
@@ -60,8 +76,47 @@ function computeValue(assets: bigint, latestYtPrice: bigint): string {
   return ((assets * latestYtPrice) / SCALE).toString();
 }
 
+function mapSimulationRevertReason(error: unknown): { reason: string; errorName: string | null } {
+  const candidate = error as {
+    shortMessage?: string;
+    details?: string;
+    message?: string;
+    data?: { errorName?: string };
+    cause?: { data?: { errorName?: string }; raw?: string; signature?: string };
+  };
+  const errorName = candidate.data?.errorName ?? candidate.cause?.data?.errorName ?? null;
+  const message = `${candidate.shortMessage ?? ''} ${candidate.details ?? ''} ${candidate.message ?? ''}`;
+  const rawRevert = `${candidate.cause?.signature ?? ''} ${candidate.cause?.raw ?? ''}`;
+
+  if (errorName === 'MarketHalted' || message.includes('halted')) {
+    return { reason: 'MARKET_HALTED', errorName };
+  }
+
+  if (errorName === 'StJtRatioTooHigh' || message.includes('StJtRatioTooHigh')) {
+    return { reason: 'SENIOR_CAPACITY_EXCEEDED', errorName };
+  }
+
+  if (
+    message.includes('allowance') ||
+    message.includes('balance') ||
+    message.includes('transfer amount exceeds') ||
+    rawRevert.includes('0xfb8f41b2') ||
+    rawRevert.includes('0xe450d38c')
+  ) {
+    return { reason: 'INSUFFICIENT_ALLOWANCE_OR_BALANCE', errorName };
+  }
+
+  if (errorName === 'RequestMinYtOutNotMet' || message.includes('minReceive') || message.includes('minYtOut')) {
+    return { reason: 'MIN_YT_OUT_NOT_MET', errorName };
+  }
+
+  return { reason: 'SIMULATION_REVERTED', errorName };
+}
+
 @Injectable()
 export class ContractReaderService {
+  private readonly logger = new Logger(ContractReaderService.name);
+
   constructor(private readonly viem: ViemClientService) {}
 
   async getMarketState(): Promise<LiveMarketState> {
@@ -133,6 +188,58 @@ export class ContractReaderService {
         withdrawBaseInstant,
       },
     };
+  }
+
+  async simulateDepositBaseInstant(input: SimulateDepositBaseInstantInput): Promise<SimulateDepositBaseInstantResult> {
+    const client = this.viem.getPublicClient();
+
+    try {
+      const { result } = await client.simulateContract({
+        address: input.market as Address,
+        abi: MARKET_ABI,
+        functionName: 'depositInstant',
+        args: [
+          input.asSenior,
+          input.tokenIn as Address,
+          BigInt(input.amountIn),
+          BigInt(input.minYtOut),
+          input.receiver as Address,
+          input.referrerId as `0x${string}`,
+        ],
+        account: input.sender as Address,
+      });
+      const ytOut = result.toString();
+      const shares = await client.readContract({
+        address: input.trancheToken as Address,
+        abi: input.asSenior ? ST_TRANCHE_ABI : JT_TRANCHE_ABI,
+        functionName: 'previewDeposit',
+        args: [BigInt(ytOut)],
+      });
+
+      return { ok: true, ytOut, sharesOut: shares.toString() };
+    } catch (error) {
+      const mapped = mapSimulationRevertReason(error);
+      const candidate = error as {
+        shortMessage?: string;
+        details?: string;
+        message?: string;
+        data?: unknown;
+        cause?: unknown;
+      };
+
+      this.logger.warn({
+        message: 'deposit base simulation reverted',
+        reason: mapped.reason,
+        errorName: mapped.errorName,
+        shortMessage: candidate.shortMessage,
+        details: candidate.details,
+        errorMessage: candidate.message,
+        data: candidate.data,
+        cause: candidate.cause,
+      });
+
+      return { ok: false, ...mapped };
+    }
   }
 
   async getPortfolioPositions(walletAddress: string): Promise<LivePortfolioPosition[]> {

@@ -79,6 +79,15 @@ Result: <pass/fail + evidence>
 
 - <decision or None>
 
+## API impact for FE
+
+- Classification: `API contract change` | `API data-source/behavior change` | `No FE-facing API impact`
+- Endpoints affected: <method/path or None>
+- Before: <previous contract/source/behavior>
+- After: <new contract/source/behavior>
+- FE action needed: <exact FE change, none, or FE review recommended>
+- API docs updated: <yes/no + path>
+
 ## Risks / blockers
 
 - <risk or None>

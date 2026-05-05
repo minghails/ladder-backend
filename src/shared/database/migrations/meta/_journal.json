@@ -8,6 +8,34 @@
       "when": 1775812802325,
       "tag": "0000_special_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777886398815,
+      "tag": "0001_fluffy_winter_soldier",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777889891394,
+      "tag": "0002_productive_juggernaut",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777890765134,
+      "tag": "0003_silly_mandroid",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777893351694,
+      "tag": "0004_previous_ikaris",
+      "breakpoints": true
     }
   ]
 }

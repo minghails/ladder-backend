@@ -109,7 +109,7 @@ export class PortfolioDataSourcesDto {
   @ApiProperty({ enum: DATA_SOURCE_VALUES, example: 'mock' })
   claimableItems!: string;
 
-  @ApiProperty({ enum: DATA_SOURCE_VALUES, example: 'mock' })
+  @ApiProperty({ enum: DATA_SOURCE_VALUES, example: 'db' })
   recentActivities!: string;
 }
 
@@ -173,6 +173,9 @@ export class PortfolioRequestDto {
   @ApiProperty({ description: 'Ladder request ID. Runtime mirrors the requestId column.', example: '42' })
   ladderRequestId!: string;
 
+  @ApiProperty({ description: 'Adaptor/underlying request ID when linked, or null before DepositRequestLinked.', example: '77', nullable: true })
+  adaptorRequestId!: string | null;
+
   @ApiProperty({ description: 'Source transaction hash, or null when not yet indexed.', example: null, nullable: true })
   txHash!: string | null;
 
@@ -224,7 +227,7 @@ export class PortfolioClaimableItemDto {
 }
 
 export class PortfolioActivityDto {
-  @ApiProperty({ example: 'mock-activity-1' })
+  @ApiProperty({ example: '0x0000000000000000000000000000000000000000000000000000000000000a01:0' })
   id!: string;
 
   @ApiProperty({ example: '0x0000000000000000000000000000000000000001' })
@@ -251,7 +254,7 @@ export class PortfolioActivityDto {
   @ApiProperty({ example: '0x0000000000000000000000000000000000000000000000000000000000000a01', nullable: true })
   txHash!: string | null;
 
-  @ApiProperty({ enum: DATA_SOURCE_VALUES, example: 'mock' })
+  @ApiProperty({ enum: DATA_SOURCE_VALUES, example: 'db' })
   source!: string;
 }
 

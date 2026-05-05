@@ -2,6 +2,8 @@ import { NotFoundException } from '@nestjs/common';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
+import { DRIZZLE_DB } from '@shared/database/database.constants';
+import { marketSnapshots } from '@shared/database/schema';
 import { MarketStateService } from './market-state.service';
 
 const LIVE_MARKET: LiveMarketState = {
@@ -38,9 +40,42 @@ describe('MarketStateService', () => {
     vi.useRealTimers();
   });
 
-  async function createService(liveMarket: LiveMarketState = LIVE_MARKET) {
+  function snapshotRow(overrides: Partial<typeof marketSnapshots.$inferSelect> = {}) {
+    return {
+      id: 1,
+      chainId: 84532,
+      marketAddress: LIVE_MARKET.address.toLowerCase(),
+      nav: '10',
+      navSt: '6',
+      navJt: '4',
+      jtStRatio: '1500000000000000000',
+      ytPrice: '1000000000000000000',
+      halted: 'false',
+      blockNumber: '100',
+      blockHash:
+        '0x0000000000000000000000000000000000000000000000000000000000000100',
+      sourceTxHash:
+        '0x0000000000000000000000000000000000000000000000000000000000000200',
+      sourceLogIndex: '7',
+      snapshotAt: new Date('2026-05-04T00:00:00.000Z'),
+      createdAt: new Date('2026-05-04T00:00:00.000Z'),
+      ...overrides,
+    };
+  }
+
+  async function createService(
+    liveMarket: LiveMarketState = LIVE_MARKET,
+    snapshots: Array<typeof marketSnapshots.$inferSelect> = [],
+  ) {
     const contractReader = {
       getMarketState: vi.fn().mockResolvedValue(liveMarket),
+    };
+    const db = {
+      query: {
+        marketSnapshots: {
+          findMany: vi.fn().mockResolvedValue(snapshots),
+        },
+      },
     };
 
     const module = await Test.createTestingModule({
@@ -50,12 +85,17 @@ describe('MarketStateService', () => {
           provide: ContractReaderService,
           useValue: contractReader,
         },
+        {
+          provide: DRIZZLE_DB,
+          useValue: db,
+        },
       ],
     }).compile();
 
     return {
       service: module.get(MarketStateService),
       contractReader,
+      db,
     };
   }
 
@@ -208,7 +248,7 @@ describe('MarketStateService', () => {
     });
   });
 
-  it('returns thin trade constraints without UI-only wallet state', async () => {
+  it('returns FE trade constraints with tokens, approvals, methods, capabilities, limits, and warnings', async () => {
     const { service } = await createService();
 
     const constraints = await service.getTradeConstraints(LIVE_MARKET.address);
@@ -216,9 +256,21 @@ describe('MarketStateService', () => {
     expect(constraints).toMatchObject({
       market: LIVE_MARKET.address,
       tokens: {
+        yt: { symbol: 'mEDGE', address: LIVE_MARKET.ytTokenAddress, decimals: 18 },
         base: { symbol: 'USDC', address: LIVE_MARKET.baseTokenAddress, decimals: 6 },
         senior: { symbol: 'st-mEDGE', address: LIVE_MARKET.seniorTrancheAddress, decimals: 18 },
         junior: { symbol: 'jt-mEDGE', address: LIVE_MARKET.juniorTrancheAddress, decimals: 18 },
+      },
+      approvals: {
+        depositYt: { token: LIVE_MARKET.ytTokenAddress, spender: LIVE_MARKET.address },
+        depositBaseInstant: { token: LIVE_MARKET.baseTokenAddress, spender: LIVE_MARKET.address },
+        withdrawSenior: { token: LIVE_MARKET.seniorTrancheAddress, spender: LIVE_MARKET.address },
+        withdrawJunior: { token: LIVE_MARKET.juniorTrancheAddress, spender: LIVE_MARKET.address },
+      },
+      methods: {
+        depositYt: 'depositYT',
+        depositBaseInstant: 'depositInstant',
+        withdrawYt: 'withdraw',
       },
       capabilities: {
         depositYt: true,
@@ -230,6 +282,10 @@ describe('MarketStateService', () => {
       limits: {
         seniorDepositCapacity: '30000000000000000000000000',
         juniorWithdrawalCapacity: '5000000000000000000000000',
+        seniorDepositCapacityYt: '30000000000000000000000000',
+        juniorWithdrawalCapacityYt: '5000000000000000000000000',
+        maxStJtRatio: LIVE_MARKET.maxStJtRatio,
+        currentStJtRatio: LIVE_MARKET.currentStJtRatio,
       },
       settlement: {
         depositBaseInstant: 'Instant when adaptor liquidity is available',
@@ -240,6 +296,8 @@ describe('MarketStateService', () => {
       dataQuality: {
         sources: {
           tokens: 'live_contract',
+          approvals: 'derived',
+          methods: 'contract_abi',
           capabilities: 'live_contract',
           limits: 'derived',
           settlement: 'config',
@@ -291,5 +349,119 @@ describe('MarketStateService', () => {
     expect(chart.series[0]).toHaveProperty('timestamp');
     expect(chart.series[0]).toHaveProperty('value');
     expect(chart.series[0]).toHaveProperty('source', 'mock');
+  });
+
+  it.each([
+    ['tvl', '10'],
+    ['tokenPrice', '1000000000000000000'],
+    ['ratio', '1500000000000000000'],
+  ] as const)('returns %s chart from indexed snapshots', async (metric, value) => {
+    const { service } = await createService(LIVE_MARKET, [
+      snapshotRow({
+        blockNumber: '100',
+        sourceLogIndex: '1',
+        nav: '10',
+        ytPrice: '1000000000000000000',
+        jtStRatio: '1500000000000000000',
+        snapshotAt: new Date('2026-05-04T00:00:00.000Z'),
+      }),
+      snapshotRow({
+        id: 2,
+        blockNumber: '99',
+        sourceLogIndex: '1',
+        nav: '9',
+        ytPrice: '900000000000000000',
+        jtStRatio: '1400000000000000000',
+        snapshotAt: new Date('2026-05-03T00:00:00.000Z'),
+      }),
+    ]);
+
+    const chart = await service.getChart(LIVE_MARKET.address, metric, '30d');
+
+    expect(chart.headline).toMatchObject({
+      value,
+      source: 'indexed_events',
+    });
+    expect(chart.series).toEqual([
+      expect.objectContaining({
+        timestamp: '2026-05-03T00:00:00.000Z',
+        source: 'indexed_events',
+      }),
+      expect.objectContaining({
+        timestamp: '2026-05-04T00:00:00.000Z',
+        value,
+        source: 'indexed_events',
+      }),
+    ]);
+    expect(chart.dataQuality.sources.series).toBe('indexed_events');
+  });
+
+  it('returns empty indexed series instead of mock when indexed snapshots are missing', async () => {
+    const { service } = await createService();
+
+    const chart = await service.getChart(LIVE_MARKET.address, 'tvl', '30d');
+
+    expect(chart.headline).toMatchObject({
+      value: '0',
+      source: 'indexed_events',
+    });
+    expect(chart.series).toEqual([]);
+    expect(chart.dataQuality.sources.series).toBe('indexed_events');
+  });
+
+  it('keeps utilization charts mock-backed until utilization projection exists', async () => {
+    const { service } = await createService(LIVE_MARKET, [snapshotRow()]);
+
+    const chart = await service.getChart(LIVE_MARKET.address, 'utilization', '30d');
+
+    expect(chart.headline.source).toBe('mock');
+    expect(chart.series[0]?.source).toBe('mock');
+  });
+
+  it('returns paginated indexed market history', async () => {
+    const { service, db } = await createService(LIVE_MARKET, [
+      snapshotRow(),
+      snapshotRow({ id: 2, blockNumber: '99' }),
+    ]);
+
+    const history = await service.getHistory(LIVE_MARKET.address, {
+      limit: 1,
+      cursor: 0,
+    });
+
+    expect(db.query.marketSnapshots.findMany).toHaveBeenCalled();
+    expect(history).toMatchObject({
+      market: LIVE_MARKET.address,
+      items: [
+        {
+          blockNumber: '100',
+          timestamp: '2026-05-04T00:00:00.000Z',
+          nav: '10',
+          navSt: '6',
+          navJt: '4',
+          stJtRatio: '1500000000000000000',
+          ytPrice: '1000000000000000000',
+          halted: false,
+        },
+      ],
+      page: {
+        limit: 1,
+        nextCursor: 1,
+        hasMore: true,
+      },
+      dataQuality: {
+        sources: {
+          history: 'indexed_events',
+        },
+      },
+    });
+  });
+
+  it('throws NotFoundException for history when address is not configured live market', async () => {
+    const { service } = await createService();
+
+    await expect(
+      service.getHistory('0x0000000000000000000000000000000000000999'),
+    ).rejects.toThrow(NotFoundException);
   });
 });

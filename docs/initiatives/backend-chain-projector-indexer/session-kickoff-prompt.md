@@ -30,11 +30,18 @@ Rules:
 - Use block timestamps from viem getBlock for projected history.
 - Normalize legacy ABI field jtStRatioAfter to semantic stJtRatioAfter in code/API.
 - Update canonical docs in same PR if API/schema/event-facing behavior changes.
+- Classify API impact for FE after every slice:
+  - API contract change: endpoint, request, response field name/type/nullability/enum/pagination/error semantics changed; update docs/canonical/api-contract.md and provide before/after.
+  - API data-source/behavior change: shape is unchanged but mock/config becomes indexed/live, source labels or empty-state behavior changes; report what changed and whether FE action is needed.
+  - No FE-facing API impact: backend-only config/schema/projector/test/docs work.
+- If unsure whether FE must change, mark FE review recommended and explain why.
+- At epic completion, consolidate all slice API deltas into one FE-facing summary.
 - Before handoff, run targeted verification, update tracker, and write session log.
 
 Completion report must include:
 - files changed
 - docs changed
+- API impact for FE
 - verification run
 - remaining risks
 - next step

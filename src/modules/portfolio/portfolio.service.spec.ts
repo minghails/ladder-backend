@@ -6,6 +6,7 @@ import {
   type LivePortfolioPosition,
 } from '@shared/blockchain/contract-reader.service';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
+import { PortfolioActivityRepository } from './portfolio-activity.repository';
 import { PortfolioService } from './portfolio.service';
 
 type DepositRequestRow = {
@@ -19,6 +20,7 @@ type DepositRequestRow = {
   amountIn: string;
   minYtOut: string;
   status: string;
+  adaptorRequestId: string | null;
   reasonCode: string | null;
   txHash: string | null;
   createdAt: Date;
@@ -88,6 +90,7 @@ const DB_REQUEST_ROWS: DepositRequestRow[] = [
     amountIn: '99800',
     minYtOut: '99000',
     status: 'requested',
+    adaptorRequestId: '77',
     reasonCode: null,
     txHash: '0xabc',
     createdAt: new Date('2026-04-14T00:00:00.000Z'),
@@ -104,6 +107,7 @@ const DB_REQUEST_ROWS: DepositRequestRow[] = [
     amountIn: '76600',
     minYtOut: '76000',
     status: 'settled',
+    adaptorRequestId: '78',
     reasonCode: null,
     txHash: null,
     createdAt: new Date('2026-04-10T00:00:00.000Z'),
@@ -120,6 +124,7 @@ const DB_REQUEST_ROWS: DepositRequestRow[] = [
     amountIn: '500',
     minYtOut: '490',
     status: 'requested',
+    adaptorRequestId: null,
     reasonCode: null,
     txHash: null,
     createdAt: new Date('2026-04-09T00:00:00.000Z'),
@@ -132,14 +137,19 @@ describe('PortfolioService', () => {
     fakeDb,
     positions = LIVE_POSITIONS,
     market = LIVE_MARKET,
+    activities = [],
   }: {
     fakeDb?: FakeDb;
     positions?: LivePortfolioPosition[];
     market?: LiveMarketState;
+    activities?: Awaited<ReturnType<PortfolioActivityRepository['findByWallet']>>;
   } = {}) {
     const contractReader = {
       getPortfolioPositions: vi.fn().mockResolvedValue(positions),
       getMarketState: vi.fn().mockResolvedValue(market),
+    };
+    const activityRepository = {
+      findByWallet: vi.fn().mockResolvedValue(activities),
     };
 
     const module = await Test.createTestingModule({
@@ -148,6 +158,10 @@ describe('PortfolioService', () => {
         {
           provide: ContractReaderService,
           useValue: contractReader,
+        },
+        {
+          provide: PortfolioActivityRepository,
+          useValue: activityRepository,
         },
         {
           provide: DRIZZLE_DB,
@@ -159,6 +173,7 @@ describe('PortfolioService', () => {
     return {
       service: module.get(PortfolioService),
       contractReader,
+      activityRepository,
     };
   }
 
@@ -263,6 +278,7 @@ describe('PortfolioService', () => {
         value: '99800',
         status: 'pending',
         ladderRequestId: '42',
+        adaptorRequestId: '77',
         txHash: '0xabc',
         settlement: {
           estimatedAt: null,
@@ -271,6 +287,71 @@ describe('PortfolioService', () => {
         source: 'db',
       },
     ]);
+  });
+
+  it('uses indexed activities in overview and marks recentActivities as db-sourced', async () => {
+    const activities = [
+      {
+        id: '0xactivity:0',
+        marketAddress: LIVE_MARKET.address,
+        marketSymbol: 'mEDGE',
+        date: '2026-05-04T00:00:00.000Z',
+        type: 'buy_senior_token' as const,
+        amount: '100',
+        value: '90',
+        status: 'success' as const,
+        txHash: '0xactivity',
+        source: 'db' as const,
+      },
+    ];
+    const { service, activityRepository } = await createService({ activities });
+
+    const portfolio = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001', {
+      includeMock: true,
+    });
+
+    expect(activityRepository.findByWallet).toHaveBeenCalledWith('0xabcdef0000000000000000000000000000000001', 'mEDGE');
+    expect(portfolio.recentActivities).toEqual(activities);
+    expect(portfolio.dataQuality.sources.recentActivities).toBe('db');
+    expect(portfolio.dataQuality.mockedSections).not.toContain('recentActivities');
+  });
+
+  it('returns paginated indexed activities and does not mix mock rows when real activity rows exist', async () => {
+    const activities = [
+      {
+        id: '0xactivity1:0',
+        marketAddress: LIVE_MARKET.address,
+        marketSymbol: 'mEDGE',
+        date: '2026-05-04T00:00:00.000Z',
+        type: 'buy_senior_token' as const,
+        amount: '100',
+        value: '90',
+        status: 'success' as const,
+        txHash: '0xactivity1',
+        source: 'db' as const,
+      },
+      {
+        id: '0xactivity2:0',
+        marketAddress: LIVE_MARKET.address,
+        marketSymbol: 'mEDGE',
+        date: '2026-05-03T00:00:00.000Z',
+        type: 'sell_junior_token' as const,
+        amount: '50',
+        value: '45',
+        status: 'success' as const,
+        txHash: '0xactivity2',
+        source: 'db' as const,
+      },
+    ];
+    const { service } = await createService({ activities });
+
+    const response = await service.getActivities('0xABCDEF0000000000000000000000000000000001', {
+      includeMock: true,
+      limit: 1,
+    });
+
+    expect(response.items).toEqual([activities[0]]);
+    expect(response.page).toEqual({ limit: 1, nextCursor: '1', hasMore: true });
   });
 
   it('uses mock opt-in for full initial UI previews without generating heavy chart data', async () => {

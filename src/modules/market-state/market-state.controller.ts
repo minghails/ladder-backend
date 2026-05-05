@@ -6,6 +6,7 @@ import {
   MarketDepositLimitsResponseDto,
   MarketDetailDto,
   MarketFactsheetResponseDto,
+  MarketHistoryResponseDto,
   MarketListResponseDto,
   MarketPriceStatusResponseDto,
   MarketTradeConstraintsResponseDto,
@@ -82,6 +83,24 @@ export class MarketStateController {
     @Query('range') range: MarketChartRange = '30d',
   ) {
     return this.marketState.getChart(address, metric, range);
+  }
+
+  @Get(':address/history')
+  @ApiOperation({ summary: 'Get indexed market history', description: 'Returns paginated market snapshots derived from indexed contract events.' })
+  @ApiParam({ name: 'address', description: 'Market contract/read-model address. Matching is case-insensitive.' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'cursor', required: false, type: Number })
+  @ApiOkResponse({ description: 'Paginated indexed market snapshots.', type: MarketHistoryResponseDto })
+  @ApiNotFoundResponse({ description: 'Market not found.', type: ErrorResponseDto })
+  getHistory(
+    @Param('address') address: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.marketState.getHistory(address, {
+      limit: limit === undefined ? undefined : Number(limit),
+      cursor: cursor === undefined ? undefined : Number(cursor),
+    });
   }
 
   @Get(':address')
