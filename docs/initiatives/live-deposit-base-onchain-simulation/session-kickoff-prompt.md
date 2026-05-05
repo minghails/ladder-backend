@@ -13,11 +13,11 @@ Read first:
 3. `backend/docs/HANDOFF.md`
 4. `backend/docs/plans/2026-05-05-live-deposit-base-onchain-simulation.md`
 5. `backend/docs/initiatives/live-deposit-base-onchain-simulation/tracker.md`
-6. `backend/docs/initiatives/live-deposit-base-onchain-simulation/epics/2026-05-05-epic-1-contract-simulation-service.md`
-7. `backend/docs/initiatives/live-deposit-base-onchain-simulation/sessions/2026-05-05-activation.md`
+6. `backend/docs/initiatives/live-deposit-base-onchain-simulation/epics/2026-05-05-epic-3-docs-smoke.md`
+7. `backend/docs/initiatives/live-deposit-base-onchain-simulation/sessions/2026-05-05-epic-2-slice-2-quote-simulation-reverts.md`
 
-Active slice: Epic 1 Slice 1 — Add simulation helper.
-Latest session log: `backend/docs/initiatives/live-deposit-base-onchain-simulation/sessions/2026-05-05-activation.md`
+Active slice: Epic 3 Slice 1 — Swagger and canonical API docs.
+Latest session log: `backend/docs/initiatives/live-deposit-base-onchain-simulation/sessions/2026-05-05-epic-2-slice-2-quote-simulation-reverts.md`
 
 Rules:
 - Do not implement beyond active slice.
@@ -55,9 +55,9 @@ Follow `backend/docs/HANDOFF.md`. Do not scan unrelated plans/initiatives. Work 
 ## Active first slice
 
 - Plan: `backend/docs/plans/2026-05-05-live-deposit-base-onchain-simulation.md`
-- Epic: `backend/docs/initiatives/live-deposit-base-onchain-simulation/epics/2026-05-05-epic-1-contract-simulation-service.md`
-- Slice: Epic 1 Slice 1 — Add simulation helper
-- Latest session log: `backend/docs/initiatives/live-deposit-base-onchain-simulation/sessions/2026-05-05-activation.md`
+- Epic: `backend/docs/initiatives/live-deposit-base-onchain-simulation/epics/2026-05-05-epic-3-docs-smoke.md`
+- Slice: Epic 3 Slice 1 — Swagger and canonical API docs
+- Latest session log: `backend/docs/initiatives/live-deposit-base-onchain-simulation/sessions/2026-05-05-epic-2-slice-2-quote-simulation-reverts.md`
 
 ## Session rules
 

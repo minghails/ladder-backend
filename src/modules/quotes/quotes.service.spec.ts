@@ -40,6 +40,11 @@ describe('QuotesService', () => {
   async function createService(liveMarket: LiveMarketState = LIVE_MARKET) {
     const contractReader = {
       getMarketState: vi.fn().mockResolvedValue(liveMarket),
+      simulateDepositBaseInstant: vi.fn().mockResolvedValue({
+        ok: true,
+        ytOut: '998000000000000000',
+        sharesOut: '998000000000000000',
+      }),
     };
 
     const module = await Test.createTestingModule({
@@ -165,6 +170,82 @@ describe('QuotesService', () => {
     });
   });
 
+  it('uses onchain simulation for deposit-base quotes when sender is supplied', async () => {
+    const { service, contractReader } = await createService();
+
+    const quote = await service.quoteDepositBase({
+      market: LIVE_MARKET.address,
+      tranche: 'junior',
+      amount: '1000000',
+      sender: '0x00000000000000000000000000000000000000aa',
+      minYtOut: '900000000000000000',
+    });
+
+    expect(contractReader.simulateDepositBaseInstant).toHaveBeenCalledWith({
+      market: LIVE_MARKET.address,
+      asSenior: false,
+      tokenIn: LIVE_MARKET.baseTokenAddress,
+      amountIn: '1000000',
+      minYtOut: '900000000000000000',
+      receiver: '0x00000000000000000000000000000000000000aa',
+      referrerId: '0x0000000000000000000000000000000000000000000000000000000000000000',
+      sender: '0x00000000000000000000000000000000000000aa',
+      trancheToken: LIVE_MARKET.juniorTrancheAddress,
+    });
+    expect(quote.estimate).toMatchObject({
+      estimatedYtOut: '998000000000000000',
+      sharesOut: '998000000000000000',
+      estimateType: 'simulated_onchain',
+    });
+    expect(quote.dataQuality.sources.estimate).toBe('simulated_onchain');
+  });
+
+  it('requires sender for exact deposit-base simulation', async () => {
+    const { service, contractReader } = await createService();
+
+    const quote = await service.quoteDepositBase({
+      market: LIVE_MARKET.address,
+      tranche: 'junior',
+      amount: '1000000',
+    });
+
+    expect(contractReader.simulateDepositBaseInstant).not.toHaveBeenCalled();
+    expect(quote.availability).toEqual({
+      available: false,
+      reason: 'SENDER_REQUIRED',
+    });
+    expect(quote.estimate.estimateType).toBe('unavailable');
+    expect(quote.warnings).toEqual(expect.arrayContaining(['SENDER_REQUIRED']));
+  });
+
+  it('marks deposit-base unavailable when onchain simulation reverts', async () => {
+    const { service, contractReader } = await createService();
+    contractReader.simulateDepositBaseInstant.mockResolvedValueOnce({
+      ok: false,
+      reason: 'INSUFFICIENT_ALLOWANCE_OR_BALANCE',
+      errorName: null,
+    });
+
+    const quote = await service.quoteDepositBase({
+      market: LIVE_MARKET.address,
+      tranche: 'junior',
+      amount: '1000000',
+      sender: '0x00000000000000000000000000000000000000aa',
+    });
+
+    expect(quote.availability).toEqual({
+      available: false,
+      reason: 'INSUFFICIENT_ALLOWANCE_OR_BALANCE',
+    });
+    expect(quote.estimate).toMatchObject({
+      estimatedYtOut: null,
+      sharesOut: null,
+      estimateType: 'simulation_reverted',
+    });
+    expect(quote.warnings).toEqual(expect.arrayContaining(['INSUFFICIENT_ALLOWANCE_OR_BALANCE']));
+    expect(quote.dataQuality.sources.estimate).toBe('simulation_reverted');
+  });
+
   it('quotes deposit-base with derived output, warnings, and action hints but no calldata', async () => {
     const { service } = await createService();
 
@@ -175,6 +256,7 @@ describe('QuotesService', () => {
       minYtOut: '990000000000000000',
       receiver: '0x00000000000000000000000000000000000000e1',
       referrerId: '0x0000000000000000000000000000000000000000000000000000000000000000',
+      sender: '0x00000000000000000000000000000000000000aa',
       slippageBps: 50,
     });
 
@@ -187,10 +269,10 @@ describe('QuotesService', () => {
         slippageBps: 50,
       },
       estimate: {
-        estimatedYtOut: '1000000',
+        estimatedYtOut: '998000000000000000',
         minYtOut: '990000000000000000',
-        sharesOut: '1000000',
-        estimateType: 'placeholder',
+        sharesOut: '998000000000000000',
+        estimateType: 'simulated_onchain',
       },
       availability: {
         available: true,
@@ -219,7 +301,7 @@ describe('QuotesService', () => {
       dataQuality: {
         sources: {
           marketState: 'live_contract',
-          estimate: 'placeholder',
+          estimate: 'simulated_onchain',
           constraints: 'derived',
         },
       },

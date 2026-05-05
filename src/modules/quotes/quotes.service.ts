@@ -11,6 +11,7 @@ export interface DepositBaseQuoteRequest {
   minYtOut?: string;
   receiver?: string;
   referrerId?: string;
+  sender?: string;
   slippageBps?: number;
 }
 
@@ -124,9 +125,11 @@ export class QuotesService {
   async quoteDepositBase(request: DepositBaseQuoteRequest) {
     const live = await this.getLiveMarket(request.market);
     const warnings = statusWarnings(live);
+    const sender = request.sender ?? '0x0000000000000000000000000000000000000000';
     const minYtOut = request.minYtOut ?? '0';
-    const receiver = request.receiver ?? '0x0000000000000000000000000000000000000000';
+    const receiver = request.receiver ?? sender;
     const referrerId = request.referrerId ?? '0x0000000000000000000000000000000000000000000000000000000000000000';
+    const token = trancheToken(live, request.tranche);
     const seniorCapacity = calculateSeniorDepositCapacity(live.navSt, live.navJt, live.maxStJtRatio);
     const capacityExceeded = request.tranche === 'senior' && BigInt(request.amount) > BigInt(seniorCapacity);
     const unavailableReason = live.halted
@@ -136,9 +139,34 @@ export class QuotesService {
         : capacityExceeded
           ? 'SENIOR_CAPACITY_EXCEEDED'
           : null;
+    const missingSender = isZeroAddress(sender);
+    const baseUnavailableReason = unavailableReason ?? (missingSender ? 'SENDER_REQUIRED' : null);
+    const simulation = baseUnavailableReason
+      ? null
+      : await this.contractReader.simulateDepositBaseInstant({
+          market: live.address,
+          asSenior: request.tranche === 'senior',
+          tokenIn: live.baseTokenAddress,
+          amountIn: request.amount,
+          minYtOut,
+          receiver,
+          referrerId,
+          sender,
+          trancheToken: token,
+        });
+    const simulationReason = simulation?.ok === false ? simulation.reason : null;
+    const finalUnavailableReason = baseUnavailableReason ?? simulationReason;
 
     if (capacityExceeded) {
       warnings.push('SENIOR_CAPACITY_EXCEEDED');
+    }
+
+    if (missingSender) {
+      warnings.push('SENDER_REQUIRED');
+    }
+
+    if (simulation?.ok === false) {
+      warnings.push(simulation.reason);
     }
 
     return {
@@ -150,14 +178,14 @@ export class QuotesService {
         slippageBps: request.slippageBps ?? null,
       },
       estimate: {
-        estimatedYtOut: request.amount,
+        estimatedYtOut: simulation?.ok === true ? simulation.ytOut : null,
         minYtOut,
-        sharesOut: request.amount,
-        estimateType: 'placeholder',
+        sharesOut: simulation?.ok === true ? simulation.sharesOut : null,
+        estimateType: simulation?.ok === true ? 'simulated_onchain' : simulation?.ok === false ? 'simulation_reverted' : 'unavailable',
       },
       availability: {
-        available: unavailableReason === null,
-        reason: unavailableReason,
+        available: finalUnavailableReason === null,
+        reason: finalUnavailableReason,
       },
       warnings,
       action: {
@@ -182,7 +210,7 @@ export class QuotesService {
       dataQuality: {
         sources: {
           marketState: 'live_contract',
-          estimate: 'placeholder',
+          estimate: simulation?.ok === true ? 'simulated_onchain' : simulation?.ok === false ? 'simulation_reverted' : 'unavailable',
           constraints: 'derived',
         },
       },

@@ -46,6 +46,22 @@ export interface LivePortfolioPosition {
   value: string;
 }
 
+export interface SimulateDepositBaseInstantInput {
+  market: string;
+  asSenior: boolean;
+  tokenIn: string;
+  amountIn: string;
+  minYtOut: string;
+  receiver: string;
+  referrerId: string;
+  sender: string;
+  trancheToken: string;
+}
+
+export type SimulateDepositBaseInstantResult =
+  | { ok: true; ytOut: string; sharesOut: string }
+  | { ok: false; reason: string; errorName: string | null };
+
 const SCALE = 10n ** 18n;
 
 function toStringValue(value: bigint | number | string | boolean): string {
@@ -58,6 +74,35 @@ function toAddress(value: unknown): Address {
 
 function computeValue(assets: bigint, latestYtPrice: bigint): string {
   return ((assets * latestYtPrice) / SCALE).toString();
+}
+
+function mapSimulationRevertReason(error: unknown): { reason: string; errorName: string | null } {
+  const candidate = error as {
+    shortMessage?: string;
+    details?: string;
+    data?: { errorName?: string };
+    cause?: { data?: { errorName?: string } };
+  };
+  const errorName = candidate.data?.errorName ?? candidate.cause?.data?.errorName ?? null;
+  const message = `${candidate.shortMessage ?? ''} ${candidate.details ?? ''}`;
+
+  if (errorName === 'MarketHalted' || message.includes('halted')) {
+    return { reason: 'MARKET_HALTED', errorName };
+  }
+
+  if (errorName === 'StJtRatioTooHigh' || message.includes('StJtRatioTooHigh')) {
+    return { reason: 'SENIOR_CAPACITY_EXCEEDED', errorName };
+  }
+
+  if (errorName === 'RequestMinYtOutNotMet' || message.includes('minReceive') || message.includes('minYtOut')) {
+    return { reason: 'MIN_YT_OUT_NOT_MET', errorName };
+  }
+
+  if (message.includes('allowance') || message.includes('balance') || message.includes('transfer amount exceeds')) {
+    return { reason: 'INSUFFICIENT_ALLOWANCE_OR_BALANCE', errorName };
+  }
+
+  return { reason: 'SIMULATION_REVERTED', errorName };
 }
 
 @Injectable()
@@ -133,6 +178,38 @@ export class ContractReaderService {
         withdrawBaseInstant,
       },
     };
+  }
+
+  async simulateDepositBaseInstant(input: SimulateDepositBaseInstantInput): Promise<SimulateDepositBaseInstantResult> {
+    const client = this.viem.getPublicClient();
+
+    try {
+      const { result } = await client.simulateContract({
+        address: input.market as Address,
+        abi: MARKET_ABI,
+        functionName: 'depositInstant',
+        args: [
+          input.asSenior,
+          input.tokenIn as Address,
+          BigInt(input.amountIn),
+          BigInt(input.minYtOut),
+          input.receiver as Address,
+          input.referrerId as `0x${string}`,
+        ],
+        account: input.sender as Address,
+      });
+      const ytOut = result.toString();
+      const shares = await client.readContract({
+        address: input.trancheToken as Address,
+        abi: input.asSenior ? ST_TRANCHE_ABI : JT_TRANCHE_ABI,
+        functionName: 'previewDeposit',
+        args: [BigInt(ytOut)],
+      });
+
+      return { ok: true, ytOut, sharesOut: shares.toString() };
+    } catch (error) {
+      return { ok: false, ...mapSimulationRevertReason(error) };
+    }
   }
 
   async getPortfolioPositions(walletAddress: string): Promise<LivePortfolioPosition[]> {
