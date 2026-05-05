@@ -122,10 +122,20 @@ describe('FE-ready Swagger documentation', () => {
     expect(depositYt?.summary).toBe('Quote direct YT deposit');
     expect(depositYt?.description).toContain('never includes raw calldata');
 
+    const depositBaseRequestSchema = document.components?.schemas?.DepositBaseQuoteRequestDto as SchemaObject | undefined;
+    const senderProperty = depositBaseRequestSchema?.properties?.sender as SchemaObject | undefined;
+    expect(senderProperty).toBeDefined();
+    expect(senderProperty?.description).toContain('wallet address used as eth_call sender');
+
     const actionSchema = document.components?.schemas?.QuoteActionDto as SchemaObject | undefined;
     const calldataIncluded = actionSchema?.properties?.calldataIncluded as SchemaObject | undefined;
     expect(calldataIncluded?.description).toContain('Always false');
     expect(calldataIncluded?.example).toBe(false);
+
+    const apiContract = readCanonicalDoc('docs/canonical/api-contract.md');
+    expect(apiContract).toContain('estimateType = "simulated_onchain"');
+    expect(apiContract).toContain('sender is required for exact current-block simulation');
+    expect(apiContract).toContain('calldataIncluded = false');
   });
 
   it('documents tx status endpoint backed by indexed events', async () => {

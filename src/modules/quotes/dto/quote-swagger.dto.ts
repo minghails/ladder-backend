@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class DepositBaseQuoteRequestDto {
   @ApiProperty({ description: 'Market address.', example: '0x3aDa769dC813e3376fCD40d05bEA12263048A487' })
@@ -18,6 +18,12 @@ export class DepositBaseQuoteRequestDto {
 
   @ApiProperty({ description: 'Optional referrer ID passed to Market depositInstant.', example: '0x0000000000000000000000000000000000000000000000000000000000000000', required: false })
   referrerId?: string;
+
+  @ApiPropertyOptional({
+    description: 'wallet address used as eth_call sender for exact current-block depositInstant simulation.',
+    example: '0x00000000000000000000000000000000000000aa',
+  })
+  sender?: string;
 
   @ApiProperty({ description: 'Optional slippage tolerance in basis points.', example: 50, required: false })
   slippageBps?: number;
@@ -204,7 +210,7 @@ class QuoteOutputDto {
   @ApiProperty({ description: 'Estimated output amount as a raw string.', example: '1000000' })
   amount!: string;
 
-  @ApiProperty({ description: 'Estimate honesty label.', example: 'placeholder' })
+  @ApiProperty({ description: 'Estimate honesty label: derived, simulated_onchain, simulation_reverted, unavailable, or placeholder.', example: 'simulated_onchain' })
   estimateType!: string;
 }
 

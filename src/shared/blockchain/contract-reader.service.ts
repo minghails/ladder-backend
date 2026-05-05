@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { Address } from 'viem';
 import { ViemClientService } from './viem-client.service';
 import {
@@ -80,11 +80,13 @@ function mapSimulationRevertReason(error: unknown): { reason: string; errorName:
   const candidate = error as {
     shortMessage?: string;
     details?: string;
+    message?: string;
     data?: { errorName?: string };
-    cause?: { data?: { errorName?: string } };
+    cause?: { data?: { errorName?: string }; raw?: string; signature?: string };
   };
   const errorName = candidate.data?.errorName ?? candidate.cause?.data?.errorName ?? null;
-  const message = `${candidate.shortMessage ?? ''} ${candidate.details ?? ''}`;
+  const message = `${candidate.shortMessage ?? ''} ${candidate.details ?? ''} ${candidate.message ?? ''}`;
+  const rawRevert = `${candidate.cause?.signature ?? ''} ${candidate.cause?.raw ?? ''}`;
 
   if (errorName === 'MarketHalted' || message.includes('halted')) {
     return { reason: 'MARKET_HALTED', errorName };
@@ -94,12 +96,18 @@ function mapSimulationRevertReason(error: unknown): { reason: string; errorName:
     return { reason: 'SENIOR_CAPACITY_EXCEEDED', errorName };
   }
 
-  if (errorName === 'RequestMinYtOutNotMet' || message.includes('minReceive') || message.includes('minYtOut')) {
-    return { reason: 'MIN_YT_OUT_NOT_MET', errorName };
+  if (
+    message.includes('allowance') ||
+    message.includes('balance') ||
+    message.includes('transfer amount exceeds') ||
+    rawRevert.includes('0xfb8f41b2') ||
+    rawRevert.includes('0xe450d38c')
+  ) {
+    return { reason: 'INSUFFICIENT_ALLOWANCE_OR_BALANCE', errorName };
   }
 
-  if (message.includes('allowance') || message.includes('balance') || message.includes('transfer amount exceeds')) {
-    return { reason: 'INSUFFICIENT_ALLOWANCE_OR_BALANCE', errorName };
+  if (errorName === 'RequestMinYtOutNotMet' || message.includes('minReceive') || message.includes('minYtOut')) {
+    return { reason: 'MIN_YT_OUT_NOT_MET', errorName };
   }
 
   return { reason: 'SIMULATION_REVERTED', errorName };
@@ -107,6 +115,8 @@ function mapSimulationRevertReason(error: unknown): { reason: string; errorName:
 
 @Injectable()
 export class ContractReaderService {
+  private readonly logger = new Logger(ContractReaderService.name);
+
   constructor(private readonly viem: ViemClientService) {}
 
   async getMarketState(): Promise<LiveMarketState> {
@@ -208,7 +218,27 @@ export class ContractReaderService {
 
       return { ok: true, ytOut, sharesOut: shares.toString() };
     } catch (error) {
-      return { ok: false, ...mapSimulationRevertReason(error) };
+      const mapped = mapSimulationRevertReason(error);
+      const candidate = error as {
+        shortMessage?: string;
+        details?: string;
+        message?: string;
+        data?: unknown;
+        cause?: unknown;
+      };
+
+      this.logger.warn({
+        message: 'deposit base simulation reverted',
+        reason: mapped.reason,
+        errorName: mapped.errorName,
+        shortMessage: candidate.shortMessage,
+        details: candidate.details,
+        errorMessage: candidate.message,
+        data: candidate.data,
+        cause: candidate.cause,
+      });
+
+      return { ok: false, ...mapped };
     }
   }
 
