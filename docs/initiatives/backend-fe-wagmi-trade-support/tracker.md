@@ -2,10 +2,10 @@
 
 ## Active
 
-- Epic: Epic 4 — Docs, integration checklist, and demo smoke
-- Slice: Epic 4 first slice — Docs, verification, and smoke checklist
+- Epic: Complete
+- Slice: Complete
 - Session kickoff: `backend/docs/initiatives/backend-fe-wagmi-trade-support/session-kickoff-prompt.md`
-- Latest session: `backend/docs/initiatives/backend-fe-wagmi-trade-support/sessions/2026-05-05-epic-3-tx-status.md`
+- Latest session: `backend/docs/initiatives/backend-fe-wagmi-trade-support/sessions/2026-05-05-epic-4-docs-smoke.md`
 
 ## Active plan
 
@@ -24,9 +24,9 @@
 
 ## Next Up
 
-1. Execute Epic 4 — Docs, integration checklist, and demo smoke.
-2. Run full backend verification and API smoke from the active plan.
-3. Add end-of-epic API impact summary and close initiative if all gates pass.
+1. Archive or merge the completed initiative.
+2. Share FE API impact summary with frontend implementer.
+3. Keep `PROJECTOR_BATCH_SIZE=10` for Alchemy free-tier demo smoke unless RPC tier changes.
 
 ## Done
 
@@ -38,6 +38,8 @@
 - Epic 1 — Correct and complete quote/preflight support.
 - Epic 2 — Complete trade constraints for FE forms.
 - Epic 3 — Add tx status endpoint backed by indexed events.
+- Epic 4 — Docs, integration checklist, and demo smoke.
+- Backend FE wagmi trade support initiative implementation complete.
 
 ## Blocked
 
@@ -56,6 +58,7 @@
 
 ## Recently Updated
 
+- 2026-05-05: Epic 4 completed. Added FE wagmi demo smoke checklist to canonical API docs, FE wagmi transaction boundary rules to integration rules, doc coverage test, full backend verification, Docker DB migration smoke, and API smoke. API impact: `No FE-facing API impact` for this slice; end-of-initiative impact remains `API contract change` from Epics 1-3. Architecture docs checked; no update needed. Next: archive/merge completed initiative.
 - 2026-05-05: Epic 3 completed. Added `GET /tx/:hash` backed by indexed `market_events`, normalized hash lookup, Swagger docs, API contract docs, and architecture docs. API impact: `API contract change`. Next: Epic 4 docs, integration checklist, and demo smoke.
 - 2026-05-05: Epic 2 completed. Expanded `GET /markets/:address/trade-constraints` with YT token metadata, approval targets, method names, YT capacity aliases, and raw ratio fields. API impact: `API contract change`. Architecture docs checked; no update needed. Next: Epic 3 tx status endpoint.
 - 2026-05-05: Epic 1 completed. Added direct YT deposit quote, corrected withdraw quote to Market `withdraw`, upgraded base instant quote hints, updated tests/DTOs/API docs. API impact: `API contract change`. Architecture docs checked; no update needed. Next: Epic 2 trade constraints.

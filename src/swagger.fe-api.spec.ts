@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
@@ -44,6 +46,10 @@ const LIVE_MARKET: LiveMarketState = {
 };
 
 describe('FE-ready Swagger documentation', () => {
+  function readCanonicalDoc(path: string) {
+    return readFileSync(resolve(__dirname, '..', '..', path), 'utf8');
+  }
+
   async function createDocument() {
     const module = await Test.createTestingModule({
       imports: [MarketStateModule, PortfolioModule, QuotesModule, TxStatusModule],
@@ -130,6 +136,21 @@ describe('FE-ready Swagger documentation', () => {
     expect(txStatus?.description).toContain('indexed market events');
     expect(txStatus?.description).toContain('does not sign, submit, or generate transaction calldata');
     expect(txStatus?.parameters?.some((parameter) => 'name' in parameter && parameter.name === 'hash')).toBe(true);
+  });
+
+  it('documents FE wagmi demo smoke checklist in canonical API and integration rules', () => {
+    const apiContract = readCanonicalDoc('docs/canonical/api-contract.md');
+    const integrationRules = readCanonicalDoc('docs/canonical/integration-rules.md');
+
+    expect(apiContract).toContain('## FE wagmi demo smoke checklist');
+    expect(apiContract).toContain('GET /markets/:address/trade-constraints');
+    expect(apiContract).toContain('POST /quotes/deposit-yt');
+    expect(apiContract).toContain('POST /quotes/deposit-base');
+    expect(apiContract).toContain('POST /quotes/withdraw-yt');
+    expect(apiContract).toContain('GET /tx/:hash');
+    expect(apiContract).toContain('calldataIncluded = false');
+    expect(integrationRules).toContain('## FE wagmi transaction flow');
+    expect(integrationRules).toContain('Backend never signs transactions, stores private keys, submits wallet transactions, or returns mandatory calldata');
   });
 
   it('documents portfolio endpoints with wallet parameters, mock controls, pagination, and split response schemas', async () => {
