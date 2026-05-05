@@ -2,8 +2,8 @@
 
 ## Active
 
-- Epic: `backend/docs/initiatives/backend-chain-projector-indexer/epics/2026-05-04-epic-03-async-deposit-request-lifecycle.md`
-- Slice: Slice 1 — deposit request schema
+- Epic: Epic 5 — Runbook and Verification
+- Slice: Slice 1 — projector runbook
 - Plan: `backend/docs/plans/2026-05-04-backend-chain-projector-indexer-plan.md`
 
 ## Planned
@@ -35,13 +35,13 @@
 
 ## In Progress
 
-- None. Next agent should start Epic 3, Slice 1.
+- None. Epic 3 complete. Optional Epic 4 activities deferred unless explicitly requested; next agent should start Epic 5, Slice 1.
 
 ## Next Up
 
 1. Read `session-kickoff-prompt.md`.
 2. Read active epic file only.
-3. Implement Epic 3, Slice 1 with TDD.
+3. Start Epic 5, Slice 1 unless Epic 4 optional activities are explicitly requested.
 4. Run targeted verification.
 5. Update this tracker and add session log.
 
@@ -61,6 +61,11 @@
 - 2026-05-04: Epic 2, Slice 4 — `/markets/:address/history` completed. Added paginated indexed snapshot history response, source label `dataQuality.sources.history = indexed_events`, Swagger DTO/route docs, invalid-market `NotFoundException` behavior, and canonical API contract response shape. Verification: RED first on missing `getHistory`; targeted Epic 2 tests pass. API impact for FE: API contract change — new implemented endpoint `GET /markets/:address/history?limit&cursor` returns documented paginated indexed snapshots. Session: `backend/docs/initiatives/backend-chain-projector-indexer/sessions/2026-05-04-epic-02-complete.md`.
 - 2026-05-04: Epic 2, Slice 5 — indexed chart metrics completed. `tvl`, `tokenPrice`, and `ratio` charts now read indexed snapshots; empty snapshot state returns empty indexed series, not mock; `yield` and `utilization` remain mock-backed. Verification: RED first on indexed metrics still returning mock; targeted Epic 2 tests pass. API impact for FE: API data-source/behavior change — chart response shape unchanged, but `tvl`/`tokenPrice`/`ratio` source changes from `mock` to `indexed_events`; empty indexed series is possible. FE action needed: review empty-state handling for those three metrics. Session: `backend/docs/initiatives/backend-chain-projector-indexer/sessions/2026-05-04-epic-02-complete.md`.
 - 2026-05-04: Epic 2 complete. API impact summary for FE: `GET /markets/:address/history?limit&cursor` is now implemented with paginated indexed snapshots and semantic `stJtRatio`; chart endpoint keeps the same path/shape but `tvl`, `tokenPrice`, and `ratio` now use indexed snapshot data and can return empty series. Docs updated: `docs/canonical/api-contract.md`. FE follow-up: add/verify empty states for indexed chart metrics and wire history view if desired.
+- 2026-05-04: Epic 3, Slice 1 — deposit request schema completed. Added nullable async lifecycle fields to `deposit_requests`: `adaptor_request_id`, lifecycle tx hashes, and terminal timestamps. Did not add optional settlement value columns because current slice has no endpoint/FE requirement for them. Verification: RED first on missing lifecycle columns; `pnpm test src/shared/database/schema/projector-schema.spec.ts` pass; `pnpm db:generate` pass/no pending schema changes; `pnpm lint` pass; `pnpm build` pass. API impact for FE: No FE-facing API impact. Architecture docs updated: `docs/canonical/backend-architecture.md`. Session: `backend/docs/initiatives/backend-chain-projector-indexer/sessions/2026-05-04-deposit-request-schema.md`.
+- 2026-05-04: Epic 3, Slice 2 — deposit request projector completed. Added `DepositRequestProjector`, idempotent `DepositRequested` upsert, lifecycle updates for pulled/linked/settled/rejected/refunded states, out-of-order warning/no-op behavior, and `runOnce()` wiring before cursor advance. Verification: RED first on missing projector/wiring; `pnpm test src/modules/chain-projector/deposit-request.projector.spec.ts src/modules/chain-projector/chain-projector.service.spec.ts` pass; `pnpm lint` pass; `pnpm build` pass. API impact for FE: No FE-facing API impact. Architecture docs checked; no update needed. Session: `backend/docs/initiatives/backend-chain-projector-indexer/sessions/2026-05-04-deposit-request-projector.md`.
+- 2026-05-04: Epic 3, Slice 3 — deposit request detail endpoint completed. Added `GET /deposit-requests/:id`, indexed request detail response, 404 behavior, DatabaseModule wiring, and canonical API contract shape; `POST /deposit-requests` remains deferred. Verification: RED first on missing `getRequest`; `pnpm test src/modules/deposit-requests` pass. API impact for FE: API contract change — `GET /deposit-requests/:id` is now concrete and `POST /deposit-requests` documented deferred. Session: `backend/docs/initiatives/backend-chain-projector-indexer/sessions/2026-05-04-deposit-request-detail-endpoint.md`.
+- 2026-05-04: Epic 3, Slice 4 — portfolio request mapping check completed. Added nullable `adaptorRequestId` to portfolio request DTO/API docs and mapping from projected `deposit_requests`; no activity derivation added. Verification: `pnpm test src/modules/portfolio` pass. API impact for FE: API contract change — portfolio request rows now include nullable `adaptorRequestId`. Session: `backend/docs/initiatives/backend-chain-projector-indexer/sessions/2026-05-04-epic-03-complete.md`.
+- 2026-05-04: Epic 3 complete. API impact summary for FE: `GET /deposit-requests/:id` now returns indexed request detail with lifecycle fields and `dataQuality.sources.request = indexed_events`; missing detail returns 404; `POST /deposit-requests` remains deferred; `/portfolio/:address/requests` and overview `pendingRequests` rows now include nullable `adaptorRequestId`. Docs updated: `docs/canonical/api-contract.md`. FE follow-up: handle request detail 404, indexed source labels, nullable `adaptorRequestId`, and deferred POST flow.
 
 ## Blocked
 
@@ -96,4 +101,4 @@
 
 ## Recently Updated
 
-- 2026-05-04: Epic 2 completed; active slice advanced to Epic 3, Slice 1.
+- 2026-05-04: Epic 3 completed; optional Epic 4 activities deferred; active slice advanced to Epic 5, Slice 1.

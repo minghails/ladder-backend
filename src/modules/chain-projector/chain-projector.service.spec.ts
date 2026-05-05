@@ -10,6 +10,7 @@ import { marketEvents, markets, projectorCursors } from '@shared/database/schema
 import { ChainProjectorService } from './chain-projector.service';
 import { MarketSnapshotProjector } from './market-snapshot.projector';
 import { PriceUpdateProjector } from './price-update.projector';
+import { DepositRequestProjector } from './deposit-request.projector';
 
 const LIVE_MARKET: LiveMarketState = {
   address: '0x3aDa769dC813e3376fCD40d05bEA12263048A487',
@@ -79,6 +80,7 @@ describe('ChainProjectorService', () => {
     eventInsertRejects = false,
     snapshotProjector = { projectEvents: vi.fn().mockResolvedValue(undefined) },
     priceUpdateProjector = { projectEvents: vi.fn().mockResolvedValue(undefined) },
+    depositRequestProjector = { projectEvents: vi.fn().mockResolvedValue(undefined) },
   }: {
     liveMarket?: LiveMarketState;
     head?: bigint;
@@ -92,6 +94,7 @@ describe('ChainProjectorService', () => {
     eventInsertRejects?: boolean;
     snapshotProjector?: { projectEvents: ReturnType<typeof vi.fn> };
     priceUpdateProjector?: { projectEvents: ReturnType<typeof vi.fn> };
+    depositRequestProjector?: { projectEvents: ReturnType<typeof vi.fn> };
   } = {}) {
     const marketOnConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
     const eventOnConflictDoNothing = eventInsertRejects
@@ -176,6 +179,10 @@ describe('ChainProjectorService', () => {
           provide: PriceUpdateProjector,
           useValue: priceUpdateProjector,
         },
+        {
+          provide: DepositRequestProjector,
+          useValue: depositRequestProjector,
+        },
       ],
     }).compile();
 
@@ -194,6 +201,7 @@ describe('ChainProjectorService', () => {
       },
       snapshotProjector,
       priceUpdateProjector,
+      depositRequestProjector,
     };
   }
 
@@ -386,6 +394,29 @@ describe('ChainProjectorService', () => {
     ]);
     expect(
       priceUpdateProjector.projectEvents.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      db.cursorValues.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+    );
+  });
+
+  it('runOnce projects decoded deposit requests before advancing cursor', async () => {
+    const depositRequestProjector = {
+      projectEvents: vi.fn().mockResolvedValue(undefined),
+    };
+    const { service, db } = await createService({
+      logs: [priceUpdatedLog()],
+      depositRequestProjector,
+    });
+
+    await service.runOnce();
+
+    expect(depositRequestProjector.projectEvents).toHaveBeenCalledWith([
+      expect.objectContaining({
+        eventName: 'PriceUpdated',
+      }),
+    ]);
+    expect(
+      depositRequestProjector.projectEvents.mock.invocationCallOrder[0],
     ).toBeLessThan(
       db.cursorValues.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
     );

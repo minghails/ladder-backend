@@ -18,6 +18,7 @@ import { normalizeEventArgs, SUPPORTED_MARKET_EVENT_NAMES } from './projector-ev
 import type { ProjectedEventName } from './projector.types';
 import { MarketSnapshotProjector } from './market-snapshot.projector';
 import { PriceUpdateProjector } from './price-update.projector';
+import { DepositRequestProjector } from './deposit-request.projector';
 
 interface ChainProjectorDatabase {
   query: {
@@ -88,6 +89,8 @@ export class ChainProjectorService
     private readonly snapshotProjector?: MarketSnapshotProjector,
     @Optional()
     private readonly priceUpdateProjector?: PriceUpdateProjector,
+    @Optional()
+    private readonly depositRequestProjector?: DepositRequestProjector,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -154,6 +157,7 @@ export class ChainProjectorService
         .onConflictDoNothing();
       await this.snapshotProjector?.projectEvents(decoded.events);
       await this.priceUpdateProjector?.projectEvents(decoded.events);
+      await this.depositRequestProjector?.projectEvents(decoded.events);
     }
 
     await this.updateCursor(cursorId, chainId, marketAddress, toBlock);

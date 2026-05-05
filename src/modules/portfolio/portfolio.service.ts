@@ -97,6 +97,7 @@ export interface PortfolioRequestDto {
   value: string;
   status: PortfolioRequestStatus;
   ladderRequestId: string;
+  adaptorRequestId: string | null;
   txHash: string | null;
   settlement: {
     estimatedAt: string | null;
@@ -332,6 +333,7 @@ function toPortfolioRequestDto(
     value: row.amountIn,
     status: mapRequestStatus(row.status),
     ladderRequestId: row.requestId,
+    adaptorRequestId: row.adaptorRequestId,
     txHash: row.txHash,
     settlement: {
       estimatedAt: null,
@@ -442,6 +444,7 @@ function mockRequests(liveMarketAddress: string): PortfolioRequestDto[] {
       value: '81000000000',
       status: 'pending',
       ladderRequestId: 'mock-request-1',
+      adaptorRequestId: null,
       txHash: null,
       settlement: { estimatedAt: null, note: 'Mock pending queue row for FE integration' },
       source: 'mock',
@@ -456,6 +459,7 @@ function mockRequests(liveMarketAddress: string): PortfolioRequestDto[] {
       value: '42000000000',
       status: 'pending',
       ladderRequestId: 'mock-request-2',
+      adaptorRequestId: null,
       txHash: null,
       settlement: { estimatedAt: null, note: 'Mock pending queue row for FE integration' },
       source: 'mock',
@@ -470,6 +474,7 @@ function mockRequests(liveMarketAddress: string): PortfolioRequestDto[] {
       value: '8800000000',
       status: 'pending',
       ladderRequestId: 'mock-request-3',
+      adaptorRequestId: null,
       txHash: null,
       settlement: { estimatedAt: null, note: 'Mock pending queue row for FE integration' },
       source: 'mock',

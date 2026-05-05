@@ -173,6 +173,9 @@ export class PortfolioRequestDto {
   @ApiProperty({ description: 'Ladder request ID. Runtime mirrors the requestId column.', example: '42' })
   ladderRequestId!: string;
 
+  @ApiProperty({ description: 'Adaptor/underlying request ID when linked, or null before DepositRequestLinked.', example: '77', nullable: true })
+  adaptorRequestId!: string | null;
+
   @ApiProperty({ description: 'Source transaction hash, or null when not yet indexed.', example: null, nullable: true })
   txHash!: string | null;
 

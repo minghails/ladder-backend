@@ -19,6 +19,7 @@ type DepositRequestRow = {
   amountIn: string;
   minYtOut: string;
   status: string;
+  adaptorRequestId: string | null;
   reasonCode: string | null;
   txHash: string | null;
   createdAt: Date;
@@ -88,6 +89,7 @@ const DB_REQUEST_ROWS: DepositRequestRow[] = [
     amountIn: '99800',
     minYtOut: '99000',
     status: 'requested',
+    adaptorRequestId: '77',
     reasonCode: null,
     txHash: '0xabc',
     createdAt: new Date('2026-04-14T00:00:00.000Z'),
@@ -104,6 +106,7 @@ const DB_REQUEST_ROWS: DepositRequestRow[] = [
     amountIn: '76600',
     minYtOut: '76000',
     status: 'settled',
+    adaptorRequestId: '78',
     reasonCode: null,
     txHash: null,
     createdAt: new Date('2026-04-10T00:00:00.000Z'),
@@ -120,6 +123,7 @@ const DB_REQUEST_ROWS: DepositRequestRow[] = [
     amountIn: '500',
     minYtOut: '490',
     status: 'requested',
+    adaptorRequestId: null,
     reasonCode: null,
     txHash: null,
     createdAt: new Date('2026-04-09T00:00:00.000Z'),
@@ -263,6 +267,7 @@ describe('PortfolioService', () => {
         value: '99800',
         status: 'pending',
         ladderRequestId: '42',
+        adaptorRequestId: '77',
         txHash: '0xabc',
         settlement: {
           estimatedAt: null,

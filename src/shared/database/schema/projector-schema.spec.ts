@@ -4,6 +4,7 @@ import { marketEvents } from './market-events';
 import { marketSnapshots } from './market-snapshots';
 import { priceUpdates } from './price-updates';
 import { projectorCursors } from './projector-cursors';
+import { depositRequests } from './deposit-requests';
 
 function columnNamesForUniqueConstraints(table: Parameters<typeof getTableConfig>[0]) {
   return getTableConfig(table).uniqueConstraints.map((constraint) =>
@@ -75,5 +76,22 @@ describe('projector schema', () => {
       'tx_hash',
       'log_index',
     ]);
+  });
+
+  it('should define nullable async deposit request lifecycle projection fields', () => {
+    const config = getTableConfig(depositRequests);
+    const columns = Object.fromEntries(
+      config.columns.map((column) => [column.name, column]),
+    );
+
+    expect(columns['adaptor_request_id']?.notNull).toBe(false);
+    expect(columns['pulled_tx_hash']?.notNull).toBe(false);
+    expect(columns['linked_tx_hash']?.notNull).toBe(false);
+    expect(columns['settled_tx_hash']?.notNull).toBe(false);
+    expect(columns['rejected_tx_hash']?.notNull).toBe(false);
+    expect(columns['refunded_tx_hash']?.notNull).toBe(false);
+    expect(columns['settled_at']?.notNull).toBe(false);
+    expect(columns['rejected_at']?.notNull).toBe(false);
+    expect(columns['refunded_at']?.notNull).toBe(false);
   });
 });
