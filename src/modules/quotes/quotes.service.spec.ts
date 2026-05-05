@@ -58,6 +58,113 @@ describe('QuotesService', () => {
     };
   }
 
+  it('quotes junior deposit-yt as available with derived estimate and wagmi action hints', async () => {
+    const { service } = await createService();
+
+    const quote = await service.quoteDepositYt({
+      market: LIVE_MARKET.address,
+      tranche: 'junior',
+      amountYt: '1000000000000000000',
+    });
+
+    expect(quote).toMatchObject({
+      input: {
+        market: LIVE_MARKET.address,
+        tranche: 'junior',
+        amountYt: '1000000000000000000',
+        token: LIVE_MARKET.ytTokenAddress,
+      },
+      estimate: {
+        sharesOut: '1000000000000000000',
+        depositValue: '1000000000000000000',
+        navAfter: '40000001000000000000000000',
+        navStAfter: LIVE_MARKET.navSt,
+        navJtAfter: '10000001000000000000000000',
+        stJtRatioAfter: '2999999700000029999',
+        estimateType: 'derived',
+      },
+      availability: {
+        available: true,
+        reason: null,
+      },
+      warnings: [],
+      action: {
+        contract: LIVE_MARKET.address,
+        method: 'depositYT',
+        args: {
+          asSenior: false,
+          amount: '1000000000000000000',
+        },
+        calldataIncluded: false,
+        approval: {
+          required: true,
+          token: LIVE_MARKET.ytTokenAddress,
+          spender: LIVE_MARKET.address,
+          amount: '1000000000000000000',
+        },
+      },
+      dataQuality: {
+        sources: {
+          marketState: 'live_contract',
+          estimate: 'derived',
+          constraints: 'derived',
+        },
+      },
+    });
+  });
+
+  it('marks senior deposit-yt unavailable when derived ratio exceeds max', async () => {
+    const { service } = await createService();
+
+    const quote = await service.quoteDepositYt({
+      market: LIVE_MARKET.address,
+      tranche: 'senior',
+      amountYt: '40000000000000000000000000',
+    });
+
+    expect(quote.availability).toMatchObject({
+      available: false,
+      reason: 'SENIOR_CAPACITY_EXCEEDED',
+    });
+    expect(quote.warnings).toContain('SENIOR_CAPACITY_EXCEEDED');
+  });
+
+  it('marks senior first deposit-yt unavailable when junior nav is zero', async () => {
+    const { service } = await createService({
+      ...LIVE_MARKET,
+      nav: '0',
+      navSt: '0',
+      navJt: '0',
+      currentStJtRatio: '0',
+    });
+
+    const quote = await service.quoteDepositYt({
+      market: LIVE_MARKET.address,
+      tranche: 'senior',
+      amountYt: '1000000000000000000',
+    });
+
+    expect(quote.availability).toMatchObject({
+      available: false,
+      reason: 'FIRST_DEPOSIT_MUST_BE_JUNIOR',
+    });
+  });
+
+  it('marks zero deposit-yt unavailable', async () => {
+    const { service } = await createService();
+
+    const quote = await service.quoteDepositYt({
+      market: LIVE_MARKET.address,
+      tranche: 'junior',
+      amountYt: '0',
+    });
+
+    expect(quote.availability).toMatchObject({
+      available: false,
+      reason: 'ZERO_AMOUNT',
+    });
+  });
+
   it('quotes deposit-base with derived output, warnings, and action hints but no calldata', async () => {
     const { service } = await createService();
 
@@ -65,6 +172,9 @@ describe('QuotesService', () => {
       market: LIVE_MARKET.address,
       tranche: 'senior',
       amount: '1000000',
+      minYtOut: '990000000000000000',
+      receiver: '0x00000000000000000000000000000000000000e1',
+      referrerId: '0x0000000000000000000000000000000000000000000000000000000000000000',
       slippageBps: 50,
     });
 
@@ -76,9 +186,10 @@ describe('QuotesService', () => {
         token: LIVE_MARKET.baseTokenAddress,
         slippageBps: 50,
       },
-      output: {
-        token: LIVE_MARKET.seniorTrancheAddress,
-        amount: '1000000',
+      estimate: {
+        estimatedYtOut: '1000000',
+        minYtOut: '990000000000000000',
+        sharesOut: '1000000',
         estimateType: 'placeholder',
       },
       availability: {
@@ -89,77 +200,98 @@ describe('QuotesService', () => {
       action: {
         contract: LIVE_MARKET.address,
         method: 'depositInstant',
-        approvalRequired: true,
-        approvalToken: LIVE_MARKET.baseTokenAddress,
+        args: {
+          asSenior: true,
+          tokenIn: LIVE_MARKET.baseTokenAddress,
+          amountIn: '1000000',
+          minYtOut: '990000000000000000',
+          receiver: '0x00000000000000000000000000000000000000e1',
+          referrerId: '0x0000000000000000000000000000000000000000000000000000000000000000',
+        },
         calldataIncluded: false,
+        approval: {
+          required: true,
+          token: LIVE_MARKET.baseTokenAddress,
+          spender: LIVE_MARKET.address,
+          amount: '1000000',
+        },
       },
       dataQuality: {
         sources: {
           marketState: 'live_contract',
-          output: 'placeholder',
+          estimate: 'placeholder',
           constraints: 'derived',
         },
       },
     });
   });
 
-  it('marks deposit-base unavailable when senior capacity is exceeded', async () => {
+  it('maps withdraw-yt assets mode to byShares false', async () => {
     const { service } = await createService();
 
-    const quote = await service.quoteDepositBase({
+    const quote = await service.quoteWithdrawYt({
       market: LIVE_MARKET.address,
       tranche: 'senior',
-      amount: '30000000000000000000000001',
+      mode: 'assets',
+      amount: '2000000000000000000',
+      receiver: '0x00000000000000000000000000000000000000e1',
     });
 
-    expect(quote.availability).toMatchObject({
-      available: false,
-      reason: 'SENIOR_CAPACITY_EXCEEDED',
+    expect(quote.action).toMatchObject({
+      contract: LIVE_MARKET.address,
+      method: 'withdraw',
+      args: {
+        fromSenior: true,
+        byShares: false,
+        amount: '2000000000000000000',
+        receiver: '0x00000000000000000000000000000000000000e1',
+      },
+      approval: {
+        token: LIVE_MARKET.seniorTrancheAddress,
+        spender: LIVE_MARKET.address,
+        amount: '2000000000000000000',
+      },
     });
-    expect(quote.warnings).toContain('SENIOR_CAPACITY_EXCEEDED');
   });
 
-  it('quotes withdraw-yt with derived output, warnings, and no calldata', async () => {
+  it('marks junior withdraw-yt unavailable when capacity is exceeded', async () => {
     const { service } = await createService();
 
     const quote = await service.quoteWithdrawYt({
       market: LIVE_MARKET.address,
       tranche: 'junior',
-      shares: '1000000000000000000',
-      slippageBps: 100,
+      mode: 'shares',
+      amount: '6000000000000000000000000',
+      receiver: '0x00000000000000000000000000000000000000e1',
     });
 
-    expect(quote).toMatchObject({
-      input: {
-        market: LIVE_MARKET.address,
-        tranche: 'junior',
-        shares: '1000000000000000000',
-        token: LIVE_MARKET.juniorTrancheAddress,
-        slippageBps: 100,
-      },
-      output: {
-        token: LIVE_MARKET.ytTokenAddress,
-        amount: '1000000000000000000',
-        estimateType: 'placeholder',
-      },
-      availability: {
-        available: true,
-        reason: null,
-      },
-      action: {
-        contract: LIVE_MARKET.juniorTrancheAddress,
-        method: 'redeem',
-        approvalRequired: false,
-        calldataIncluded: false,
-      },
-      dataQuality: {
-        sources: {
-          marketState: 'live_contract',
-          output: 'placeholder',
-          constraints: 'derived',
-        },
-      },
+    expect(quote.availability).toMatchObject({
+      available: false,
+      reason: 'JUNIOR_WITHDRAWAL_CAPACITY_EXCEEDED',
     });
+    expect(quote.warnings).toContain('JUNIOR_WITHDRAWAL_CAPACITY_EXCEEDED');
+  });
+
+  it('marks withdraw-yt unavailable for zero amount or receiver', async () => {
+    const { service } = await createService();
+
+    const zeroAmount = await service.quoteWithdrawYt({
+      market: LIVE_MARKET.address,
+      tranche: 'senior',
+      mode: 'shares',
+      amount: '0',
+      receiver: '0x00000000000000000000000000000000000000e1',
+    });
+    const zeroReceiver = await service.quoteWithdrawYt({
+      market: LIVE_MARKET.address,
+      tranche: 'senior',
+      mode: 'shares',
+      amount: '1000000000000000000',
+      receiver: '0x0000000000000000000000000000000000000000',
+    });
+
+    expect(zeroAmount.availability.reason).toBe('ZERO_AMOUNT');
+    expect(zeroReceiver.availability.reason).toBe('ZERO_RECEIVER');
   });
 
   it('adds halted and stale warnings to quote responses', async () => {

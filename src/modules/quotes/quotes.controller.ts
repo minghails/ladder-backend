@@ -3,6 +3,8 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   DepositBaseQuoteRequestDto,
   DepositBaseQuoteResponseDto,
+  DepositYtQuoteRequestDto,
+  DepositYtQuoteResponseDto,
   WithdrawYtQuoteRequestDto,
   WithdrawYtQuoteResponseDto,
 } from './dto/quote-swagger.dto';
@@ -12,6 +14,17 @@ import { QuotesService } from './quotes.service';
 @Controller('quotes')
 export class QuotesController {
   constructor(private readonly quotes: QuotesService) {}
+
+  @Post('deposit-yt')
+  @ApiOperation({
+    summary: 'Quote direct YT deposit',
+    description:
+      'Returns FE-safe quote metadata for the direct YT buy path. This route returns action hints only and never includes raw calldata or a full transaction request.',
+  })
+  @ApiOkResponse({ description: 'Deposit-YT quote with availability, warnings, and action hints.', type: DepositYtQuoteResponseDto })
+  quoteDepositYt(@Body() body: DepositYtQuoteRequestDto) {
+    return this.quotes.quoteDepositYt(body);
+  }
 
   @Post('deposit-base')
   @ApiOperation({
