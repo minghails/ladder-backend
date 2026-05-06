@@ -84,7 +84,7 @@ export class PortfolioController {
   @ApiOperation({
     summary: 'Get portfolio claimable rows',
     description:
-      'Returns lazy-loaded claimable rows. Claim action metadata is mock-only and disabled until claim/refund/withdraw source-of-truth work is implemented.',
+      'Returns lazy-loaded refund claimable rows from rejected, unrefunded async deposit requests. includeMock=true returns bounded disabled mock rows for FE integration.',
   })
   @ApiParam({ name: 'address', description: 'Wallet address.', example: '0xabcdef0000000000000000000000000000000001' })
   @ApiQuery({ name: 'includeMock', required: false, example: 'true' })

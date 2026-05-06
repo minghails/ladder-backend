@@ -5,8 +5,8 @@
 ```text
 Follow `backend/docs/HANDOFF.md`.
 Do not scan unrelated plans/initiatives/session logs.
-Work one bounded slice only.
-Do not implement beyond active slice unless explicitly requested.
+Initiative complete; do not implement more unless explicitly requested.
+If continuing, work one bounded post-completion task only.
 
 Read first:
 1. Root `AGENTS.md`
@@ -14,11 +14,11 @@ Read first:
 3. `backend/docs/HANDOFF.md`
 4. `backend/docs/plans/2026-05-06-portfolio-earnings-claimables-live-projection.md`
 5. `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/tracker.md`
-6. `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/epics/2026-05-06-epic-3-live-earnings.md`
+6. `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/epics/2026-05-06-epic-5-docs-verification.md`
 7. Latest relevant session log only if tracker names one or tracker lacks enough context.
 
-Active slice: Epic 3 Slice 1 — Earnings repository.
-Latest session log: `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/sessions/2026-05-06-epic-2-event-projection.md`.
+Active slice: Complete — initiative finished.
+Latest session log: `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/sessions/2026-05-06-epic-5-docs-verification.md`.
 
 Rules:
 - Stay within plan scope.

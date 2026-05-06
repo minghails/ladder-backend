@@ -7,6 +7,8 @@ import {
 } from '@shared/blockchain/contract-reader.service';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { PortfolioActivityRepository } from './portfolio-activity.repository';
+import { PortfolioClaimablesRepository, type PortfolioClaimableDto } from './portfolio-claimables.repository';
+import { PortfolioEarningsRepository, type PortfolioCostBasisDto } from './portfolio-earnings.repository';
 import { PortfolioService } from './portfolio.service';
 
 type DepositRequestRow = {
@@ -138,11 +140,15 @@ describe('PortfolioService', () => {
     positions = LIVE_POSITIONS,
     market = LIVE_MARKET,
     activities = [],
+    claimables = [],
+    costBasisRows = [],
   }: {
     fakeDb?: FakeDb;
     positions?: LivePortfolioPosition[];
     market?: LiveMarketState;
     activities?: Awaited<ReturnType<PortfolioActivityRepository['findByWallet']>>;
+    claimables?: PortfolioClaimableDto[];
+    costBasisRows?: PortfolioCostBasisDto[];
   } = {}) {
     const contractReader = {
       getPortfolioPositions: vi.fn().mockResolvedValue(positions),
@@ -150,6 +156,13 @@ describe('PortfolioService', () => {
     };
     const activityRepository = {
       findByWallet: vi.fn().mockResolvedValue(activities),
+    };
+    const earningsRepository = {
+      findCostBasis: vi.fn().mockResolvedValue(costBasisRows),
+      findCashflowsSince: vi.fn().mockResolvedValue([]),
+    };
+    const claimablesRepository = {
+      findByWallet: vi.fn().mockResolvedValue(claimables),
     };
 
     const module = await Test.createTestingModule({
@@ -164,6 +177,14 @@ describe('PortfolioService', () => {
           useValue: activityRepository,
         },
         {
+          provide: PortfolioEarningsRepository,
+          useValue: earningsRepository,
+        },
+        {
+          provide: PortfolioClaimablesRepository,
+          useValue: claimablesRepository,
+        },
+        {
           provide: DRIZZLE_DB,
           useValue: fakeDb,
         },
@@ -174,6 +195,8 @@ describe('PortfolioService', () => {
       service: module.get(PortfolioService),
       contractReader,
       activityRepository,
+      earningsRepository,
+      claimablesRepository,
     };
   }
 
@@ -246,6 +269,81 @@ describe('PortfolioService', () => {
       },
     });
     expect(portfolio.links.earnings).toContain('/portfolio/0xabcdef0000000000000000000000000000000001/earnings');
+  });
+
+  it('uses live earnings projection in portfolio overview summary', async () => {
+    const { service } = await createService({
+      positions: [
+        {
+          marketAddress: LIVE_MARKET.address,
+          marketSymbol: 'mEDGE',
+          assetType: 'senior',
+          assetSymbol: 'st-mEDGE',
+          tokenAddress: LIVE_MARKET.seniorTrancheAddress,
+          shares: '100',
+          assets: '100',
+          value: '1300',
+        },
+      ],
+      costBasisRows: [
+        {
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          marketAddress: LIVE_MARKET.address,
+          tranche: 'senior',
+          openShares: '100',
+          openCostBasis: '1000',
+          realizedPnl: '200',
+          depositedValue: '1000',
+          withdrawnValue: '600',
+          dataQuality: 'full',
+        },
+      ],
+    });
+
+    const response = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001');
+
+    expect(response.summary.currentEarning).toBe('500');
+    expect(response.summary.currentEarningSource).toBe('indexed_events');
+    expect(response.summary.earning30d).toBe('0');
+    expect(response.summary.earning30dSource).toBe('unavailable');
+    expect(response.summary.totalValueChange.source).toBe('indexed_events');
+    expect(response.dataQuality.sources.earnings).toBe('indexed_events');
+  });
+
+  it('uses live claimables in portfolio overview preview and summary', async () => {
+    const { service, claimablesRepository } = await createService({
+      claimables: [
+        {
+          id: 'refund-42',
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          marketAddress: LIVE_MARKET.address,
+          marketSymbol: 'mEDGE',
+          date: '2026-04-14T00:00:00.000Z',
+          type: 'refund',
+          amount: '99800',
+          token: LIVE_MARKET.baseTokenAddress,
+          action: { label: 'Refund', enabled: true, reason: null },
+          source: 'db',
+        },
+      ],
+    });
+
+    const response = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001');
+
+    expect(claimablesRepository.findByWallet).toHaveBeenCalledWith('0xabcdef0000000000000000000000000000000001', 'mEDGE');
+    expect(response.claimableItems).toEqual([
+      expect.objectContaining({
+        id: 'refund-42',
+        type: 'refund',
+        source: 'db',
+      }),
+    ]);
+    expect(response.summary.claimable).toEqual({
+      amount: '99800',
+      token: 'USDC',
+      source: 'db',
+    });
+    expect(response.dataQuality.sources.claimableItems).toBe('db');
   });
 
   it('returns zero totals and no positions when live balances are empty', async () => {
@@ -452,6 +550,53 @@ describe('PortfolioService', () => {
     expect(response.dataQuality.sources.earnings).toBe('mock');
   });
 
+  it('returns live earnings from cost basis and live positions', async () => {
+    const { service, earningsRepository } = await createService({
+      positions: [
+        {
+          marketAddress: LIVE_MARKET.address,
+          marketSymbol: 'mEDGE',
+          assetType: 'senior',
+          assetSymbol: 'st-mEDGE',
+          tokenAddress: LIVE_MARKET.seniorTrancheAddress,
+          shares: '100',
+          assets: '100',
+          value: '1300',
+        },
+      ],
+      costBasisRows: [
+        {
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          marketAddress: LIVE_MARKET.address,
+          tranche: 'senior',
+          openShares: '100',
+          openCostBasis: '1000',
+          realizedPnl: '200',
+          depositedValue: '1000',
+          withdrawnValue: '600',
+          dataQuality: 'full',
+        },
+      ],
+    });
+
+    const response = await service.getEarnings('0xABCDEF0000000000000000000000000000000001');
+
+    expect(earningsRepository.findCostBasis).toHaveBeenCalledWith('0xabcdef0000000000000000000000000000000001');
+    expect(response.earnings).toEqual([
+      expect.objectContaining({
+        marketAddress: LIVE_MARKET.address,
+        assetType: 'senior',
+        lifetime: '500',
+        earning30d: '0',
+        source: 'indexed_events',
+      }),
+    ]);
+    expect(response.history.series).toEqual([]);
+    expect(response.dataQuality.sources.earnings).toBe('indexed_events');
+    expect(response.dataQuality.sources.earningsHistory).toBe('unavailable');
+    expect(response.dataQuality.historyAvailable).toBe(false);
+  });
+
   it('returns empty unavailable earnings by default without mock rows', async () => {
     const previousMockFallback = process.env['PORTFOLIO_MOCK_FALLBACK'];
     process.env['PORTFOLIO_MOCK_FALLBACK'] = 'true';
@@ -508,6 +653,37 @@ describe('PortfolioService', () => {
     expect(response.dataQuality.mockEnabled).toBe(true);
     expect(response.dataQuality.mockedSections).toEqual(
       expect.arrayContaining(['earnings', 'earningsHistory']),
+    );
+  });
+
+  it('returns rejected unrefunded deposit requests as live claimables', async () => {
+    const { service, claimablesRepository } = await createService({
+      claimables: [
+        {
+          id: 'refund-42',
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          marketAddress: LIVE_MARKET.address,
+          marketSymbol: 'mEDGE',
+          date: '2026-04-14T00:00:00.000Z',
+          type: 'refund',
+          amount: '99800',
+          token: LIVE_MARKET.baseTokenAddress,
+          action: { label: 'Refund', enabled: true, reason: null },
+          source: 'db',
+        },
+      ],
+    });
+
+    const response = await service.getClaimables('0xABCDEF0000000000000000000000000000000001');
+
+    expect(claimablesRepository.findByWallet).toHaveBeenCalledWith('0xabcdef0000000000000000000000000000000001', 'mEDGE');
+    expect(response.items).toHaveLength(1);
+    expect(response.items[0]).toEqual(
+      expect.objectContaining({
+        id: 'refund-42',
+        type: 'refund',
+        source: 'db',
+      }),
     );
   });
 
