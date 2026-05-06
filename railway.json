@@ -15,6 +15,9 @@
   },
   "deploy": {
     "startCommand": null,
+    "preDeployCommand": [
+      "pnpm db:migrate"
+    ],
     "healthcheckPath": "/health",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
