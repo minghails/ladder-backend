@@ -11,7 +11,7 @@ import { decodeEventLog, type Address, type Hex } from 'viem';
 import { eq } from 'drizzle-orm';
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
 import { ViemClientService } from '@shared/blockchain/viem-client.service';
-import { MARKET_ABI } from '@shared/blockchain/contracts';
+import { JT_TRANCHE_ABI, MARKET_ABI, ST_TRANCHE_ABI } from '@shared/blockchain/contracts';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { marketEvents, markets, projectorCursors } from '@shared/database/schema';
 import { normalizeEventArgs, SUPPORTED_MARKET_EVENT_NAMES } from './projector-events';
@@ -19,6 +19,8 @@ import type { ProjectedEventName } from './projector.types';
 import { MarketSnapshotProjector } from './market-snapshot.projector';
 import { PriceUpdateProjector } from './price-update.projector';
 import { DepositRequestProjector } from './deposit-request.projector';
+import { PortfolioAccountingRepository } from '../portfolio/portfolio-accounting.repository';
+import { applyDeposit, applyWithdrawal, type CostBasisState } from '../portfolio/portfolio-accounting.service';
 
 interface ChainProjectorDatabase {
   query: {
@@ -45,6 +47,7 @@ interface ProjectorBatchSummary {
 }
 
 interface RawMarketLog {
+  address?: string | null;
   blockNumber?: bigint | null;
   blockHash?: string | null;
   transactionHash?: string | null;
@@ -54,6 +57,7 @@ interface RawMarketLog {
 }
 
 interface CompleteMarketLog {
+  address?: string | null;
   blockNumber: bigint;
   blockHash: string;
   transactionHash: string;
@@ -62,8 +66,41 @@ interface CompleteMarketLog {
   topics: [Hex, ...Hex[]];
 }
 
+interface TrancheDepositEvent {
+  txHash: string;
+  logIndex: string;
+  tranche: 'senior' | 'junior';
+  owner: string;
+  assets: string;
+  shares: string;
+}
+
 function normalizeAddress(address: string): string {
   return address.toLowerCase();
+}
+
+function valueToString(value: unknown): string | null {
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.trunc(value).toString();
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  return null;
+}
+
+function valueToBoolean(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
+}
+
+function valueToAddress(value: unknown): string | null {
+  return typeof value === 'string' ? normalizeAddress(value) : null;
 }
 
 function marketNameFromLiveState(live: LiveMarketState): string {
@@ -91,6 +128,8 @@ export class ChainProjectorService
     private readonly priceUpdateProjector?: PriceUpdateProjector,
     @Optional()
     private readonly depositRequestProjector?: DepositRequestProjector,
+    @Optional()
+    private readonly portfolioAccountingRepository?: PortfolioAccountingRepository,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -141,14 +180,25 @@ export class ChainProjectorService
 
     const toBlock = minBigInt(fromBlock + batchSize - 1n, safeToBlock);
 
-    await this.bootstrapConfiguredMarket();
+    const live = await this.bootstrapConfiguredMarket();
+    const watchedAddresses = [
+      marketAddress,
+      normalizeAddress(live.seniorTrancheAddress),
+      normalizeAddress(live.juniorTrancheAddress),
+    ] as Address[];
     const logs = (await client.getLogs({
-      address: marketAddress as Address,
+      address: watchedAddresses,
       fromBlock,
       toBlock,
     })) as RawMarketLog[];
     const blockTimestamps = await this.fetchBlockTimestamps(logs);
-    const decoded = this.decodeLogs(logs, chainId, marketAddress, blockTimestamps);
+    const decoded = this.decodeLogs(
+      logs,
+      chainId,
+      marketAddress,
+      blockTimestamps,
+      live,
+    );
 
     if (decoded.events.length > 0) {
       await this.db
@@ -158,6 +208,7 @@ export class ChainProjectorService
       await this.snapshotProjector?.projectEvents(decoded.events);
       await this.priceUpdateProjector?.projectEvents(decoded.events);
       await this.depositRequestProjector?.projectEvents(decoded.events);
+      await this.projectPortfolioAccounting(decoded.events, decoded.trancheDeposits);
     }
 
     await this.updateCursor(cursorId, chainId, marketAddress, toBlock);
@@ -189,7 +240,7 @@ export class ChainProjectorService
     }
   }
 
-  private async bootstrapConfiguredMarket(): Promise<void> {
+  private async bootstrapConfiguredMarket(): Promise<LiveMarketState> {
     const live = await this.contractReader.getMarketState();
     const now = new Date();
     const row = {
@@ -218,6 +269,8 @@ export class ChainProjectorService
           updatedAt: now,
         },
       });
+
+    return live;
   }
 
   private async fetchBlockTimestamps(logs: RawMarketLog[]): Promise<Map<string, Date>> {
@@ -248,8 +301,14 @@ export class ChainProjectorService
     chainId: number,
     marketAddress: string,
     blockTimestamps: Map<string, Date>,
-  ): { events: (typeof marketEvents.$inferInsert)[]; skipped: number } {
+    live: LiveMarketState,
+  ): {
+    events: (typeof marketEvents.$inferInsert)[];
+    trancheDeposits: TrancheDepositEvent[];
+    skipped: number;
+  } {
     const events: (typeof marketEvents.$inferInsert)[] = [];
+    const trancheDeposits: TrancheDepositEvent[] = [];
     let skipped = 0;
 
     for (const log of logs) {
@@ -259,6 +318,38 @@ export class ChainProjectorService
       }
 
       try {
+        const logAddress = normalizeAddress(log.address ?? marketAddress);
+        const blockNumber = log.blockNumber.toString();
+        const blockTimestamp = blockTimestamps.get(blockNumber);
+        if (blockTimestamp === undefined) {
+          skipped += 1;
+          continue;
+        }
+
+        if (logAddress === normalizeAddress(live.seniorTrancheAddress) || logAddress === normalizeAddress(live.juniorTrancheAddress)) {
+          const decoded = decodeEventLog({
+            abi: logAddress === normalizeAddress(live.seniorTrancheAddress) ? ST_TRANCHE_ABI : JT_TRANCHE_ABI,
+            data: log.data,
+            topics: log.topics,
+          });
+
+          if (decoded.eventName !== 'Deposit') {
+            skipped += 1;
+            continue;
+          }
+
+          const args = normalizeEventArgs(decoded.args as Record<string, unknown>);
+          trancheDeposits.push({
+            txHash: log.transactionHash,
+            logIndex: log.logIndex.toString(),
+            tranche: logAddress === normalizeAddress(live.seniorTrancheAddress) ? 'senior' : 'junior',
+            owner: normalizeAddress(String(args['owner'])),
+            assets: String(args['assets']),
+            shares: String(args['shares']),
+          });
+          continue;
+        }
+
         const decoded = decodeEventLog({
           abi: MARKET_ABI,
           data: log.data,
@@ -266,12 +357,6 @@ export class ChainProjectorService
         });
         const eventName = decoded.eventName;
         if (!isProjectedEventName(eventName)) {
-          skipped += 1;
-          continue;
-        }
-        const blockNumber = log.blockNumber.toString();
-        const blockTimestamp = blockTimestamps.get(blockNumber);
-        if (blockTimestamp === undefined) {
           skipped += 1;
           continue;
         }
@@ -291,7 +376,177 @@ export class ChainProjectorService
       }
     }
 
-    return { events, skipped };
+    return { events, trancheDeposits, skipped };
+  }
+
+  private async projectPortfolioAccounting(
+    events: (typeof marketEvents.$inferInsert)[],
+    trancheDeposits: TrancheDepositEvent[],
+  ): Promise<void> {
+    if (this.portfolioAccountingRepository === undefined) {
+      return;
+    }
+
+    for (const event of events) {
+      const args = event.args as Record<string, unknown>;
+
+      if (event.eventName === 'DepositYT') {
+        const asSenior = valueToBoolean(args['asSenior']);
+        const shares = valueToString(args['shares']);
+        const assets = valueToString(args['assets']);
+        const value = valueToString(args['depositValue']);
+        const user = valueToAddress(args['user']);
+
+        if (asSenior === null || shares === null || assets === null || value === null || user === null) {
+          continue;
+        }
+
+        const tranche = asSenior ? 'senior' : 'junior';
+        const owner = this.findTrancheDepositOwner(event, trancheDeposits, tranche, assets, shares) ?? user;
+        const inserted = await this.portfolioAccountingRepository.recordDepositCashflow({
+          chainId: event.chainId,
+          marketAddress: event.marketAddress,
+          walletAddress: owner,
+          tranche,
+          shares,
+          assets,
+          value,
+          txHash: event.txHash,
+          logIndex: event.logIndex,
+          blockNumber: event.blockNumber,
+          blockTimestamp: event.blockTimestamp,
+          sourceEventName: 'DepositYT',
+        });
+        await this.applyCostBasisIfInserted(inserted.inserted, owner, event.marketAddress, tranche, event.blockNumber, 'deposit', shares, value);
+        continue;
+      }
+
+      if (event.eventName === 'DepositSettled') {
+        const asSenior = valueToBoolean(args['asSenior']);
+        const shares = valueToString(args['sharesMinted']);
+        const assets = valueToString(args['ytIn']);
+        const value = valueToString(args['depositValue']);
+        const receiver = valueToAddress(args['receiver']);
+
+        if (asSenior === null || shares === null || assets === null || value === null || receiver === null) {
+          continue;
+        }
+
+        const tranche = asSenior ? 'senior' : 'junior';
+        const inserted = await this.portfolioAccountingRepository.recordDepositCashflow({
+          chainId: event.chainId,
+          marketAddress: event.marketAddress,
+          walletAddress: receiver,
+          tranche,
+          shares,
+          assets,
+          value,
+          txHash: event.txHash,
+          logIndex: event.logIndex,
+          blockNumber: event.blockNumber,
+          blockTimestamp: event.blockTimestamp,
+          sourceEventName: 'DepositSettled',
+        });
+        await this.applyCostBasisIfInserted(inserted.inserted, receiver, event.marketAddress, tranche, event.blockNumber, 'deposit', shares, value);
+        continue;
+      }
+
+      if (event.eventName === 'WithdrawYT') {
+        const fromSenior = valueToBoolean(args['fromSenior']);
+        const shares = valueToString(args['sharesIn']);
+        const assets = valueToString(args['assetsOut']);
+        const value = valueToString(args['withdrawValue']);
+        const user = valueToAddress(args['user']);
+
+        if (fromSenior === null || shares === null || assets === null || value === null || user === null) {
+          continue;
+        }
+
+        const tranche = fromSenior ? 'senior' : 'junior';
+        const inserted = await this.portfolioAccountingRepository.recordWithdrawalCashflow({
+          chainId: event.chainId,
+          marketAddress: event.marketAddress,
+          walletAddress: user,
+          tranche,
+          shares,
+          assets,
+          value,
+          txHash: event.txHash,
+          logIndex: event.logIndex,
+          blockNumber: event.blockNumber,
+          blockTimestamp: event.blockTimestamp,
+          sourceEventName: 'WithdrawYT',
+        });
+        await this.applyCostBasisIfInserted(inserted.inserted, user, event.marketAddress, tranche, event.blockNumber, 'withdraw', shares, value);
+      }
+    }
+  }
+
+  private findTrancheDepositOwner(
+    event: typeof marketEvents.$inferInsert,
+    trancheDeposits: TrancheDepositEvent[],
+    tranche: 'senior' | 'junior',
+    assets: string,
+    shares: string,
+  ): string | null {
+    const eventLogIndex = BigInt(event.logIndex);
+    const matches = trancheDeposits.filter(
+      (deposit) =>
+        deposit.txHash === event.txHash &&
+        deposit.tranche === tranche &&
+        deposit.assets === assets &&
+        deposit.shares === shares &&
+        BigInt(deposit.logIndex) > eventLogIndex,
+    );
+
+    const match = matches[0];
+    return matches.length === 1 && match !== undefined ? match.owner : null;
+  }
+
+  private async applyCostBasisIfInserted(
+    inserted: boolean,
+    walletAddress: string,
+    marketAddress: string,
+    tranche: 'senior' | 'junior',
+    blockNumber: string,
+    type: 'deposit' | 'withdraw',
+    shares: string,
+    value: string,
+  ): Promise<void> {
+    if (!inserted || this.portfolioAccountingRepository === undefined) {
+      return;
+    }
+
+    const existing = (await this.portfolioAccountingRepository.findCostBasisByWallet(walletAddress)).find(
+      (row) =>
+        typeof row.marketAddress === 'string' &&
+        normalizeAddress(row.marketAddress) === normalizeAddress(marketAddress) &&
+        row.tranche === tranche,
+    );
+    const state: CostBasisState = existing === undefined ? {
+      openShares: '0',
+      openCostBasis: '0',
+      realizedPnl: '0',
+      depositedValue: '0',
+      withdrawnValue: '0',
+      dataQuality: 'full',
+    } : {
+      openShares: existing.openShares,
+      openCostBasis: existing.openCostBasis,
+      realizedPnl: existing.realizedPnl,
+      depositedValue: existing.depositedValue,
+      withdrawnValue: existing.withdrawnValue,
+      dataQuality: existing.dataQuality === 'partial' ? 'partial' : 'full',
+    };
+    const nextState = type === 'deposit' ? applyDeposit(state, { shares, value }) : applyWithdrawal(state, { shares, value });
+
+    await this.portfolioAccountingRepository.upsertCostBasis({
+      walletAddress,
+      marketAddress,
+      tranche,
+      state: nextState,
+      lastProcessedBlock: blockNumber,
+    });
   }
 
   private async updateCursor(

@@ -14,11 +14,11 @@ Read first:
 3. `backend/docs/HANDOFF.md`
 4. `backend/docs/plans/2026-05-06-portfolio-earnings-claimables-live-projection.md`
 5. `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/tracker.md`
-6. `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/epics/2026-05-06-epic-1-schema-accounting-core.md`
+6. `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/epics/2026-05-06-epic-3-live-earnings.md`
 7. Latest relevant session log only if tracker names one or tracker lacks enough context.
 
-Active slice: Epic 1 Slice 1 — Portfolio accounting schema.
-Latest session log: none.
+Active slice: Epic 3 Slice 1 — Earnings repository.
+Latest session log: `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/sessions/2026-05-06-epic-2-event-projection.md`.
 
 Rules:
 - Stay within plan scope.

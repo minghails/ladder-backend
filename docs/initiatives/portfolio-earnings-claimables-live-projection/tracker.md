@@ -2,10 +2,10 @@
 
 ## Active
 
-- Epic: Epic 1 — Schema And Accounting Core
-- Slice: Slice 1 — Portfolio accounting schema
+- Epic: Epic 3 — Live Earnings Endpoint And Overview Summary
+- Slice: Slice 1 — Earnings repository
 - Session kickoff: `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/session-kickoff-prompt.md`
-- Latest session: None
+- Latest session: `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/sessions/2026-05-06-epic-2-event-projection.md`
 
 ## Active plan
 
@@ -25,12 +25,17 @@
 
 ## Next Up
 
-1. Epic 1 Slice 1 — Portfolio accounting schema.
+1. Epic 3 Slice 1 — Earnings repository.
 
 ## Done
 
 - Initiative generated from plan.
 - Epics and bounded slices generated from plan scope.
+- Epic 1 Slice 1 — Portfolio accounting schema.
+- Epic 1 Slice 2 — Pure average-cost accounting service.
+- Epic 2 Slice 1 — Accounting repository.
+- Epic 2 Slice 2 — Market cashflow projection.
+- Epic 2 Slice 3 — Tranche event owner correlation.
 
 ## Blocked
 
@@ -64,4 +69,7 @@
 
 ## Recently Updated
 
+- 2026-05-06: Epic 2 completed accounting repository, Market event cashflow projection, cost-basis updates, and same-transaction tranche `Deposit.owner` correlation. API impact: `No FE-facing API impact`. Verification: `pnpm test src/modules/chain-projector src/modules/portfolio/portfolio-accounting.service.spec.ts src/modules/portfolio/portfolio-accounting.repository.spec.ts` PASS, `pnpm lint` 0 errors/4 pre-existing warnings, `pnpm build` PASS. Latest session: `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/sessions/2026-05-06-epic-2-event-projection.md`. Next: Epic 3 Slice 1 — Earnings repository.
+- 2026-05-06: Epic 1 completed with average-cost accounting service. API impact: `No FE-facing API impact`. Verification: `pnpm test src/shared/database/schema/projector-schema.spec.ts src/modules/portfolio/portfolio-accounting.service.spec.ts` PASS, `pnpm lint` 0 errors/4 pre-existing warnings, `pnpm build` PASS. Latest session: `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/sessions/2026-05-06-epic-1-slice-2-accounting-service.md`. Next: Epic 2 Slice 1 — Accounting repository.
+- 2026-05-06: Epic 1 Slice 1 added portfolio accounting schema, migration `0005_lonely_calypso.sql`, and canonical backend architecture data-model sync. API impact: `No FE-facing API impact`. Verification: `pnpm test src/shared/database/schema/projector-schema.spec.ts` PASS, `pnpm db:generate` PASS, `pnpm lint` 0 errors/4 pre-existing warnings, `pnpm build` PASS. Latest session: `backend/docs/initiatives/portfolio-earnings-claimables-live-projection/sessions/2026-05-06-epic-1-slice-1-schema.md`. Next: Epic 1 Slice 2 — Pure average-cost accounting service.
 - 2026-05-06: Initiative activated from plan. Next: Epic 1 Slice 1 — Portfolio accounting schema.

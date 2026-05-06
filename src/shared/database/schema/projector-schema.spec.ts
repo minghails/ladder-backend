@@ -5,6 +5,7 @@ import { marketSnapshots } from './market-snapshots';
 import { priceUpdates } from './price-updates';
 import { projectorCursors } from './projector-cursors';
 import { depositRequests } from './deposit-requests';
+import { portfolioCashflows, portfolioCostBasis } from './index';
 
 function columnNamesForUniqueConstraints(table: Parameters<typeof getTableConfig>[0]) {
   return getTableConfig(table).uniqueConstraints.map((constraint) =>
@@ -93,5 +94,10 @@ describe('projector schema', () => {
     expect(columns['settled_at']?.notNull).toBe(false);
     expect(columns['rejected_at']?.notNull).toBe(false);
     expect(columns['refunded_at']?.notNull).toBe(false);
+  });
+
+  it('exports portfolio accounting tables', () => {
+    expect(portfolioCashflows).toBeDefined();
+    expect(portfolioCostBasis).toBeDefined();
   });
 });
