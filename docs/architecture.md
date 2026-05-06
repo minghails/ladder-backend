@@ -15,4 +15,4 @@ Each module maps 1:1 with the canonical architecture. See individual module READ
 - `oracle` → `shared/blockchain`, `shared/database`
 - `risk-monitoring` → `market-state`, `shared/database`
 - `tx-status` → `shared/database`
-- `chain-projector` → `shared/blockchain`, `shared/database`
+- `chain-projector` → `shared/blockchain`, `shared/database`, `portfolio` accounting repository

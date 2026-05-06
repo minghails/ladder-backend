@@ -4,8 +4,10 @@ import { ContractReaderService, type LivePortfolioPosition } from '@shared/block
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { depositRequests } from '@shared/database/schema';
 import { PortfolioActivityRepository } from './portfolio-activity.repository';
+import { PortfolioClaimablesRepository } from './portfolio-claimables.repository';
+import { PortfolioEarningsRepository, type PortfolioCostBasisDto } from './portfolio-earnings.repository';
 
-export type PortfolioDataSource = 'live' | 'db' | 'mock' | 'placeholder' | 'unavailable' | 'derived';
+export type PortfolioDataSource = 'live' | 'db' | 'mock' | 'placeholder' | 'unavailable' | 'derived' | 'indexed_events' | 'partial_indexed_events';
 export type PortfolioRequestStatus = 'pending' | 'settled' | 'rejected' | 'refunded';
 export type PortfolioTransactionStatus = 'success' | 'pending' | 'failed' | 'rejected';
 export type PortfolioTransactionType =
@@ -262,6 +264,10 @@ function envMockEnabled(): boolean {
 
 function shouldIncludeMock(options?: PortfolioQueryOptions): boolean {
   return options?.includeMock === true || envMockEnabled();
+}
+
+function explicitMockRequested(options?: PortfolioQueryOptions): boolean {
+  return options?.includeMock === true;
 }
 
 function clampLimit(limit?: number): number {
@@ -620,7 +626,32 @@ function sumClaimables(items: PortfolioClaimableItemDto[]): string {
   return items.reduce((total, item) => total + BigInt(item.amount), 0n).toString();
 }
 
-function dataQuality(mockEnabled: boolean, recentActivitiesSource: PortfolioDataSource = mockEnabled ? 'mock' : 'unavailable'): PortfolioDataQualityDto {
+function computeLiveClaimableSummary(
+  claimableItems: PortfolioClaimableItemDto[],
+  baseTokenAddress: string,
+): Pick<PortfolioSummaryDto['claimable'], 'amount' | 'source'> {
+  const normalizedBaseToken = baseTokenAddress.toLowerCase();
+  const enabledBaseRefunds = claimableItems.filter(
+    (item) => item.type === 'refund' && item.action.enabled && item.token.toLowerCase() === normalizedBaseToken,
+  );
+
+  if (enabledBaseRefunds.length === 0) {
+    return { amount: '0', source: 'unavailable' };
+  }
+
+  return {
+    amount: enabledBaseRefunds.reduce((total, item) => total + BigInt(item.amount), 0n).toString(),
+    source: 'db',
+  };
+}
+
+function dataQuality(
+  mockEnabled: boolean,
+  recentActivitiesSource: PortfolioDataSource = mockEnabled ? 'mock' : 'unavailable',
+  earningsSource: PortfolioDataSource = mockEnabled ? 'mock' : 'unavailable',
+  earningsHistorySource: PortfolioDataSource = mockEnabled ? 'mock' : 'unavailable',
+  claimableItemsSource: PortfolioDataSource = mockEnabled ? 'mock' : 'unavailable',
+): PortfolioDataQualityDto {
   const mockedSections = mockEnabled
     ? [
         'summary.totalValueChange',
@@ -648,11 +679,72 @@ function dataQuality(mockEnabled: boolean, recentActivitiesSource: PortfolioData
     sources: {
       positions: 'live',
       pendingRequests: 'db',
-      earnings: mockEnabled ? 'mock' : 'unavailable',
-      earningsHistory: mockEnabled ? 'mock' : 'unavailable',
-      claimableItems: mockEnabled ? 'mock' : 'unavailable',
+      earnings: earningsSource,
+      earningsHistory: earningsHistorySource,
+      claimableItems: claimableItemsSource,
       recentActivities: recentActivitiesSource,
     },
+  };
+}
+
+function earningsSourceForRow(row: Pick<PortfolioCostBasisDto, 'dataQuality'>): PortfolioDataSource {
+  return row.dataQuality === 'full' ? 'indexed_events' : 'partial_indexed_events';
+}
+
+function earningsSourceForRows(rows: PortfolioCostBasisDto[]): PortfolioDataSource {
+  if (rows.length === 0) {
+    return 'unavailable';
+  }
+
+  return rows.some((row) => row.dataQuality !== 'full') ? 'partial_indexed_events' : 'indexed_events';
+}
+
+function findLivePosition(row: PortfolioCostBasisDto, livePositions: LivePortfolioPosition[]): LivePortfolioPosition | undefined {
+  return livePositions.find(
+    (position) =>
+      position.marketAddress.toLowerCase() === row.marketAddress.toLowerCase() &&
+      position.assetType === row.tranche,
+  );
+}
+
+function computeTotalPnl(row: PortfolioCostBasisDto, livePositions: LivePortfolioPosition[]): bigint {
+  const currentValue = BigInt(findLivePosition(row, livePositions)?.value ?? '0');
+  return BigInt(row.realizedPnl) + currentValue - BigInt(row.openCostBasis);
+}
+
+function computePortfolioEarningsSummary(
+  rows: PortfolioCostBasisDto[],
+  livePositions: LivePortfolioPosition[],
+): Pick<PortfolioSummaryDto, 'currentEarning' | 'currentEarningSource' | 'earning30d' | 'earning30dSource' | 'totalValueChange'> {
+  const currentEarning = rows.reduce((total, row) => total + computeTotalPnl(row, livePositions), 0n).toString();
+  const source = earningsSourceForRows(rows);
+
+  return {
+    currentEarning,
+    currentEarningSource: source,
+    earning30d: '0',
+    earning30dSource: 'unavailable',
+    totalValueChange: {
+      amount: currentEarning,
+      percent: '0',
+      source,
+    },
+  };
+}
+
+function toPortfolioEarningDto(row: PortfolioCostBasisDto, livePositions: LivePortfolioPosition[]): PortfolioEarningDto {
+  const position = findLivePosition(row, livePositions);
+  const assetType = row.tranche === 'junior' ? 'junior' : 'senior';
+
+  return {
+    id: `${row.marketAddress}:${assetType}`,
+    marketAddress: row.marketAddress,
+    marketSymbol: position?.marketSymbol ?? stripTranchePrefix(assetType === 'senior' ? 'st-Unknown Market' : 'jt-Unknown Market'),
+    assetType,
+    assetSymbol: position?.assetSymbol ?? (assetType === 'senior' ? 'Senior Token' : 'Junior Token'),
+    lifetime: computeTotalPnl(row, livePositions).toString(),
+    earning30d: '0',
+    source: earningsSourceForRow(row),
   };
 }
 
@@ -673,6 +765,8 @@ export class PortfolioService {
   constructor(
     private readonly contractReader: ContractReaderService,
     private readonly activityRepository: PortfolioActivityRepository,
+    private readonly earningsRepository: PortfolioEarningsRepository,
+    private readonly claimablesRepository: PortfolioClaimablesRepository,
     @Optional()
     @Inject(DRIZZLE_DB)
     private readonly db?: PortfolioDatabase,
@@ -680,58 +774,75 @@ export class PortfolioService {
 
   async getPortfolio(address: string, options?: PortfolioQueryOptions): Promise<PortfolioResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = shouldIncludeMock(options);
-    const [livePositions, liveMarket, requestRows] = await Promise.all([
+    const includeSandboxMock = explicitMockRequested(options);
+    const [livePositions, liveMarket, requestRows, costBasisRows] = await Promise.all([
       this.contractReader.getPortfolioPositions(normalizedAddress),
       this.contractReader.getMarketState(),
       this.readRequests(normalizedAddress),
+      this.earningsRepository.findCostBasis(normalizedAddress),
     ]);
     const marketSymbol = stripTranchePrefix(liveMarket.seniorSymbol);
-    const indexedActivities = await this.activityRepository.findByWallet(normalizedAddress, marketSymbol);
+    const [indexedActivities, liveClaimables] = await Promise.all([
+      this.activityRepository.findByWallet(normalizedAddress, marketSymbol),
+      includeSandboxMock ? Promise.resolve([]) : this.claimablesRepository.findByWallet(normalizedAddress, marketSymbol),
+    ]);
     const totalValue = sumValues(livePositions);
     const realPendingRequests = requestRows
       .filter((row) => mapRequestStatus(row.status) === 'pending')
       .map((row) => toPortfolioRequestDto(row, liveMarket.address, marketSymbol));
-    const pendingRequests = realPendingRequests.length > 0 ? realPendingRequests : includeMock ? mockRequests(liveMarket.address) : [];
-    const claimableItems = includeMock ? mockClaimableItems(liveMarket.address).slice(0, OVERVIEW_CLAIMABLE_LIMIT) : [];
+    const pendingRequests = realPendingRequests.length > 0 ? realPendingRequests : includeSandboxMock ? mockRequests(liveMarket.address) : [];
+    const claimableItems = includeSandboxMock
+      ? mockClaimableItems(liveMarket.address).slice(0, OVERVIEW_CLAIMABLE_LIMIT)
+      : liveClaimables.slice(0, OVERVIEW_CLAIMABLE_LIMIT);
     const recentActivities = indexedActivities.length > 0
       ? indexedActivities.slice(0, OVERVIEW_ACTIVITY_LIMIT)
-      : includeMock
+      : includeSandboxMock
         ? mockActivities(liveMarket.address).slice(0, OVERVIEW_ACTIVITY_LIMIT)
         : [];
-    const recentActivitiesSource = indexedActivities.length > 0 ? 'db' : includeMock ? 'mock' : 'unavailable';
-    const claimableAmount = includeMock ? sumClaimables(claimableItems) : '0';
+    const recentActivitiesSource = indexedActivities.length > 0 ? 'db' : includeSandboxMock ? 'mock' : 'unavailable';
+    const liveClaimableSummary = computeLiveClaimableSummary(claimableItems, liveMarket.baseTokenAddress);
+    const claimableAmount = includeSandboxMock ? sumClaimables(claimableItems) : liveClaimableSummary.amount;
+    const claimableSource = includeSandboxMock ? 'mock' : liveClaimableSummary.source;
+    const earningsSummary = computePortfolioEarningsSummary(costBasisRows, livePositions);
 
     return {
       walletAddress: normalizedAddress,
       summary: {
         totalValue: totalValue.toString(),
-        totalValueChange: {
-          amount: includeMock ? '4230400000000000000' : '0',
-          percent: includeMock ? '0.02' : '0',
-          source: includeMock ? 'mock' : 'placeholder',
-        },
-        currentEarning: includeMock ? '6420750000000000000' : '0',
-        currentEarningSource: includeMock ? 'mock' : 'placeholder',
-        earning30d: includeMock ? '980500000000000000' : '0',
-        earning30dSource: includeMock ? 'mock' : 'placeholder',
+        totalValueChange: includeSandboxMock
+          ? {
+              amount: '4230400000000000000',
+              percent: '0.02',
+              source: 'mock',
+            }
+          : earningsSummary.totalValueChange,
+        currentEarning: includeSandboxMock ? '6420750000000000000' : earningsSummary.currentEarning,
+        currentEarningSource: includeSandboxMock ? 'mock' : earningsSummary.currentEarningSource,
+        earning30d: includeSandboxMock ? '980500000000000000' : earningsSummary.earning30d,
+        earning30dSource: includeSandboxMock ? 'mock' : earningsSummary.earning30dSource,
         claimable: {
           amount: claimableAmount,
           token: 'USDC',
-          source: includeMock ? 'mock' : 'placeholder',
+          source: claimableSource,
         },
       },
       positions: livePositions.map((position) => toPortfolioPositionDto(position, totalValue)),
       portfolioMetrics: {
         totalValue: totalValue.toString(),
-        netApy: includeMock ? '0.0425' : '0',
-        netApySource: includeMock ? 'mock' : 'placeholder',
+        netApy: includeSandboxMock ? '0.0425' : '0',
+        netApySource: includeSandboxMock ? 'mock' : 'unavailable',
       },
       claimableItems,
       pendingRequests: pendingRequests.slice(0, OVERVIEW_PENDING_LIMIT),
       recentActivities,
-      dataQuality: dataQuality(includeMock, recentActivitiesSource),
-      links: links(normalizedAddress, includeMock),
+      dataQuality: dataQuality(
+        includeSandboxMock,
+        recentActivitiesSource,
+        includeSandboxMock ? 'mock' : earningsSummary.currentEarningSource,
+        includeSandboxMock ? 'mock' : 'unavailable',
+        claimableSource,
+      ),
+      links: links(normalizedAddress, includeSandboxMock),
     };
   }
 
@@ -757,24 +868,41 @@ export class PortfolioService {
 
   async getEarnings(address: string, options?: PortfolioEarningsOptions): Promise<PortfolioEarningsResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = shouldIncludeMock(options);
+    const includeMock = explicitMockRequested(options);
     const liveMarket = await this.contractReader.getMarketState();
     const range = options?.range ?? '30d';
     const granularity = options?.granularity ?? 'day';
 
+    if (includeMock) {
+      return {
+        walletAddress: normalizedAddress,
+        earnings: mockEarnings(liveMarket.address),
+        history: mockEarningsHistory(range, granularity),
+        dataQuality: dataQuality(includeMock),
+      };
+    }
+
+    const [livePositions, costBasisRows] = await Promise.all([
+      this.contractReader.getPortfolioPositions(normalizedAddress),
+      this.earningsRepository.findCostBasis(normalizedAddress),
+    ]);
+    const earningsSource = earningsSourceForRows(costBasisRows);
+
     return {
       walletAddress: normalizedAddress,
-      earnings: includeMock ? mockEarnings(liveMarket.address) : [],
-      history: includeMock ? mockEarningsHistory(range, granularity) : { range, granularity, series: [] },
-      dataQuality: dataQuality(includeMock),
+      earnings: costBasisRows.map((row) => toPortfolioEarningDto(row, livePositions)),
+      history: { range, granularity, series: [] },
+      dataQuality: dataQuality(false, 'unavailable', earningsSource, 'unavailable'),
     };
   }
 
   async getClaimables(address: string, options?: PortfolioListOptions): Promise<PortfolioClaimablesResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = shouldIncludeMock(options);
+    const includeMock = explicitMockRequested(options);
     const liveMarket = await this.contractReader.getMarketState();
-    const page = paginate(includeMock ? mockClaimableItems(liveMarket.address) : [], options);
+    const marketSymbol = stripTranchePrefix(liveMarket.seniorSymbol);
+    const liveClaimables = includeMock ? [] : await this.claimablesRepository.findByWallet(normalizedAddress, marketSymbol);
+    const page = paginate(includeMock ? mockClaimableItems(liveMarket.address) : liveClaimables, options);
 
     return {
       walletAddress: normalizedAddress,

@@ -4,9 +4,10 @@ import { ConfigService } from '@nestjs/config';
 import { encodeAbiParameters, encodeEventTopics } from 'viem';
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
 import { ViemClientService } from '@shared/blockchain/viem-client.service';
-import { MARKET_ABI } from '@shared/blockchain/contracts';
+import { MARKET_ABI, ST_TRANCHE_ABI } from '@shared/blockchain/contracts';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { marketEvents, markets, projectorCursors } from '@shared/database/schema';
+import { PortfolioAccountingRepository } from '../portfolio/portfolio-accounting.repository';
 import { ChainProjectorService } from './chain-projector.service';
 import { MarketSnapshotProjector } from './market-snapshot.projector';
 import { PriceUpdateProjector } from './price-update.projector';
@@ -67,6 +68,124 @@ describe('ChainProjectorService', () => {
     };
   }
 
+  function depositSettledLog() {
+    return {
+      address: LIVE_MARKET.address,
+      blockNumber: 100n,
+      blockHash: '0x0000000000000000000000000000000000000000000000000000000000000100',
+      transactionHash: '0x0000000000000000000000000000000000000000000000000000000000000300',
+      logIndex: 8,
+      topics: encodeEventTopics({
+        abi: MARKET_ABI,
+        eventName: 'DepositSettled',
+        args: {
+          requestId: 42n,
+          receiver: '0xabcdef0000000000000000000000000000000001',
+        },
+      }),
+      data: encodeAbiParameters(
+        [
+          { type: 'bool', name: 'asSenior' },
+          { type: 'uint256', name: 'ytIn' },
+          { type: 'uint256', name: 'sharesMinted' },
+          { type: 'uint256', name: 'depositValue' },
+          { type: 'uint256', name: 'navAfter' },
+          { type: 'uint256', name: 'navStAfter' },
+          { type: 'uint256', name: 'navJtAfter' },
+          { type: 'uint256', name: 'jtStRatioAfter' },
+        ],
+        [true, 90n, 100n, 1000n, 1n, 2n, 3n, 4n],
+      ),
+    };
+  }
+
+  function withdrawYtLog() {
+    return {
+      address: LIVE_MARKET.address,
+      blockNumber: 100n,
+      blockHash: '0x0000000000000000000000000000000000000000000000000000000000000100',
+      transactionHash: '0x0000000000000000000000000000000000000000000000000000000000000400',
+      logIndex: 9,
+      topics: encodeEventTopics({
+        abi: MARKET_ABI,
+        eventName: 'WithdrawYT',
+        args: {
+          user: '0xabcdef0000000000000000000000000000000001',
+          receiver: '0x2222222222222222222222222222222222222222',
+          fromSenior: false,
+        },
+      }),
+      data: encodeAbiParameters(
+        [
+          { type: 'bool', name: 'byShares' },
+          { type: 'uint256', name: 'sharesIn' },
+          { type: 'uint256', name: 'assetsOut' },
+          { type: 'uint256', name: 'withdrawValue' },
+          { type: 'uint256', name: 'navAfter' },
+          { type: 'uint256', name: 'navStAfter' },
+          { type: 'uint256', name: 'navJtAfter' },
+          { type: 'uint256', name: 'jtStRatioAfter' },
+        ],
+        [true, 40n, 35n, 600n, 1n, 2n, 3n, 4n],
+      ),
+    };
+  }
+
+  function directDepositYtLog() {
+    return {
+      address: LIVE_MARKET.address,
+      blockNumber: 100n,
+      blockHash: '0x0000000000000000000000000000000000000000000000000000000000000100',
+      transactionHash: '0x0000000000000000000000000000000000000000000000000000000000000500',
+      logIndex: 10,
+      topics: encodeEventTopics({
+        abi: MARKET_ABI,
+        eventName: 'DepositYT',
+        args: {
+          user: '0xabcdef0000000000000000000000000000000001',
+          asSenior: true,
+        },
+      }),
+      data: encodeAbiParameters(
+        [
+          { type: 'uint256', name: 'assets' },
+          { type: 'uint256', name: 'shares' },
+          { type: 'uint256', name: 'depositValue' },
+          { type: 'uint256', name: 'navAfter' },
+          { type: 'uint256', name: 'navStAfter' },
+          { type: 'uint256', name: 'navJtAfter' },
+          { type: 'uint256', name: 'jtStRatioAfter' },
+        ],
+        [90n, 100n, 1000n, 1n, 2n, 3n, 4n],
+      ),
+    };
+  }
+
+  function trancheDepositLog() {
+    return {
+      address: LIVE_MARKET.seniorTrancheAddress,
+      blockNumber: 100n,
+      blockHash: '0x0000000000000000000000000000000000000000000000000000000000000100',
+      transactionHash: '0x0000000000000000000000000000000000000000000000000000000000000500',
+      logIndex: 11,
+      topics: encodeEventTopics({
+        abi: ST_TRANCHE_ABI,
+        eventName: 'Deposit',
+        args: {
+          sender: LIVE_MARKET.address,
+          owner: '0x3333333333333333333333333333333333333333',
+        },
+      }),
+      data: encodeAbiParameters(
+        [
+          { type: 'uint256', name: 'assets' },
+          { type: 'uint256', name: 'shares' },
+        ],
+        [90n, 100n],
+      ),
+    };
+  }
+
   async function createService({
     liveMarket = LIVE_MARKET,
     head = 100n,
@@ -81,6 +200,12 @@ describe('ChainProjectorService', () => {
     snapshotProjector = { projectEvents: vi.fn().mockResolvedValue(undefined) },
     priceUpdateProjector = { projectEvents: vi.fn().mockResolvedValue(undefined) },
     depositRequestProjector = { projectEvents: vi.fn().mockResolvedValue(undefined) },
+    portfolioAccountingRepository = {
+      recordDepositCashflow: vi.fn().mockResolvedValue({ inserted: true }),
+      recordWithdrawalCashflow: vi.fn().mockResolvedValue({ inserted: true }),
+      findCostBasisByWallet: vi.fn().mockResolvedValue([]),
+      upsertCostBasis: vi.fn().mockResolvedValue(undefined),
+    },
   }: {
     liveMarket?: LiveMarketState;
     head?: bigint;
@@ -95,6 +220,12 @@ describe('ChainProjectorService', () => {
     snapshotProjector?: { projectEvents: ReturnType<typeof vi.fn> };
     priceUpdateProjector?: { projectEvents: ReturnType<typeof vi.fn> };
     depositRequestProjector?: { projectEvents: ReturnType<typeof vi.fn> };
+    portfolioAccountingRepository?: {
+      recordDepositCashflow: ReturnType<typeof vi.fn>;
+      recordWithdrawalCashflow: ReturnType<typeof vi.fn>;
+      findCostBasisByWallet: ReturnType<typeof vi.fn>;
+      upsertCostBasis: ReturnType<typeof vi.fn>;
+    };
   } = {}) {
     const marketOnConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
     const eventOnConflictDoNothing = eventInsertRejects
@@ -183,6 +314,10 @@ describe('ChainProjectorService', () => {
           provide: DepositRequestProjector,
           useValue: depositRequestProjector,
         },
+        {
+          provide: PortfolioAccountingRepository,
+          useValue: portfolioAccountingRepository,
+        },
       ],
     }).compile();
 
@@ -202,6 +337,7 @@ describe('ChainProjectorService', () => {
       snapshotProjector,
       priceUpdateProjector,
       depositRequestProjector,
+      portfolioAccountingRepository,
     };
   }
 
@@ -419,6 +555,111 @@ describe('ChainProjectorService', () => {
       depositRequestProjector.projectEvents.mock.invocationCallOrder[0],
     ).toBeLessThan(
       db.cursorValues.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+    );
+  });
+
+  it('projects DepositSettled into portfolio accounting', async () => {
+    const portfolioAccountingRepository = {
+      recordDepositCashflow: vi.fn().mockResolvedValue({ inserted: true }),
+      recordWithdrawalCashflow: vi.fn().mockResolvedValue({ inserted: true }),
+      findCostBasisByWallet: vi.fn().mockResolvedValue([]),
+      upsertCostBasis: vi.fn().mockResolvedValue(undefined),
+    };
+    const { service } = await createService({
+      logs: [depositSettledLog()],
+      portfolioAccountingRepository,
+    });
+
+    await service.runOnce();
+
+    expect(portfolioAccountingRepository.recordDepositCashflow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        walletAddress: '0xabcdef0000000000000000000000000000000001',
+        tranche: 'senior',
+        shares: '100',
+        assets: '90',
+        value: '1000',
+        sourceEventName: 'DepositSettled',
+      }),
+    );
+    expect(portfolioAccountingRepository.upsertCostBasis).toHaveBeenCalledWith(
+      expect.objectContaining({
+        walletAddress: '0xabcdef0000000000000000000000000000000001',
+        tranche: 'senior',
+        lastProcessedBlock: '100',
+      }),
+    );
+  });
+
+  it('projects WithdrawYT into portfolio accounting', async () => {
+    const portfolioAccountingRepository = {
+      recordDepositCashflow: vi.fn().mockResolvedValue({ inserted: true }),
+      recordWithdrawalCashflow: vi.fn().mockResolvedValue({ inserted: true }),
+      findCostBasisByWallet: vi.fn().mockResolvedValue([
+        {
+          marketAddress: LIVE_MARKET.address.toLowerCase(),
+          tranche: 'junior',
+          openShares: '100',
+          openCostBasis: '1000',
+          realizedPnl: '0',
+          depositedValue: '1000',
+          withdrawnValue: '0',
+          dataQuality: 'full',
+        },
+      ]),
+      upsertCostBasis: vi.fn().mockResolvedValue(undefined),
+    };
+    const { service } = await createService({
+      logs: [withdrawYtLog()],
+      portfolioAccountingRepository,
+    });
+
+    await service.runOnce();
+
+    expect(portfolioAccountingRepository.recordWithdrawalCashflow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        walletAddress: '0xabcdef0000000000000000000000000000000001',
+        tranche: 'junior',
+        shares: '40',
+        assets: '35',
+        value: '600',
+        sourceEventName: 'WithdrawYT',
+      }),
+    );
+    expect(portfolioAccountingRepository.upsertCostBasis).toHaveBeenCalled();
+    const upsertInput = portfolioAccountingRepository.upsertCostBasis.mock.calls[0]?.[0] as {
+      state: { openShares: string; openCostBasis: string; realizedPnl: string };
+    };
+    expect(upsertInput.state).toMatchObject({
+      openShares: '60',
+      openCostBasis: '600',
+      realizedPnl: '200',
+    });
+  });
+
+  it('correlates DepositYT with same transaction tranche Deposit owner', async () => {
+    const portfolioAccountingRepository = {
+      recordDepositCashflow: vi.fn().mockResolvedValue({ inserted: true }),
+      recordWithdrawalCashflow: vi.fn().mockResolvedValue({ inserted: true }),
+      findCostBasisByWallet: vi.fn().mockResolvedValue([]),
+      upsertCostBasis: vi.fn().mockResolvedValue(undefined),
+    };
+    const { service } = await createService({
+      logs: [directDepositYtLog(), trancheDepositLog()],
+      portfolioAccountingRepository,
+    });
+
+    await service.runOnce();
+
+    expect(portfolioAccountingRepository.recordDepositCashflow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        walletAddress: '0x3333333333333333333333333333333333333333',
+        tranche: 'senior',
+        shares: '100',
+        assets: '90',
+        value: '1000',
+        sourceEventName: 'DepositYT',
+      }),
     );
   });
 

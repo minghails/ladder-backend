@@ -7,6 +7,8 @@ import {
 } from '@shared/blockchain/contract-reader.service';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { PortfolioActivityRepository } from './portfolio-activity.repository';
+import { PortfolioClaimablesRepository, type PortfolioClaimableDto } from './portfolio-claimables.repository';
+import { PortfolioEarningsRepository, type PortfolioCostBasisDto } from './portfolio-earnings.repository';
 import { PortfolioService } from './portfolio.service';
 
 type DepositRequestRow = {
@@ -138,11 +140,15 @@ describe('PortfolioService', () => {
     positions = LIVE_POSITIONS,
     market = LIVE_MARKET,
     activities = [],
+    claimables = [],
+    costBasisRows = [],
   }: {
     fakeDb?: FakeDb;
     positions?: LivePortfolioPosition[];
     market?: LiveMarketState;
     activities?: Awaited<ReturnType<PortfolioActivityRepository['findByWallet']>>;
+    claimables?: PortfolioClaimableDto[];
+    costBasisRows?: PortfolioCostBasisDto[];
   } = {}) {
     const contractReader = {
       getPortfolioPositions: vi.fn().mockResolvedValue(positions),
@@ -150,6 +156,13 @@ describe('PortfolioService', () => {
     };
     const activityRepository = {
       findByWallet: vi.fn().mockResolvedValue(activities),
+    };
+    const earningsRepository = {
+      findCostBasis: vi.fn().mockResolvedValue(costBasisRows),
+      findCashflowsSince: vi.fn().mockResolvedValue([]),
+    };
+    const claimablesRepository = {
+      findByWallet: vi.fn().mockResolvedValue(claimables),
     };
 
     const module = await Test.createTestingModule({
@@ -164,6 +177,14 @@ describe('PortfolioService', () => {
           useValue: activityRepository,
         },
         {
+          provide: PortfolioEarningsRepository,
+          useValue: earningsRepository,
+        },
+        {
+          provide: PortfolioClaimablesRepository,
+          useValue: claimablesRepository,
+        },
+        {
           provide: DRIZZLE_DB,
           useValue: fakeDb,
         },
@@ -174,6 +195,8 @@ describe('PortfolioService', () => {
       service: module.get(PortfolioService),
       contractReader,
       activityRepository,
+      earningsRepository,
+      claimablesRepository,
     };
   }
 
@@ -226,7 +249,7 @@ describe('PortfolioService', () => {
     expect(portfolio.portfolioMetrics).toEqual({
       totalValue: '150000000000000000000',
       netApy: '0',
-      netApySource: 'placeholder',
+      netApySource: 'unavailable',
     });
     expect(portfolio.claimableItems).toEqual([]);
     expect(portfolio.recentActivities).toEqual([]);
@@ -248,6 +271,81 @@ describe('PortfolioService', () => {
     expect(portfolio.links.earnings).toContain('/portfolio/0xabcdef0000000000000000000000000000000001/earnings');
   });
 
+  it('uses live earnings projection in portfolio overview summary', async () => {
+    const { service } = await createService({
+      positions: [
+        {
+          marketAddress: LIVE_MARKET.address,
+          marketSymbol: 'mEDGE',
+          assetType: 'senior',
+          assetSymbol: 'st-mEDGE',
+          tokenAddress: LIVE_MARKET.seniorTrancheAddress,
+          shares: '100',
+          assets: '100',
+          value: '1300',
+        },
+      ],
+      costBasisRows: [
+        {
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          marketAddress: LIVE_MARKET.address,
+          tranche: 'senior',
+          openShares: '100',
+          openCostBasis: '1000',
+          realizedPnl: '200',
+          depositedValue: '1000',
+          withdrawnValue: '600',
+          dataQuality: 'full',
+        },
+      ],
+    });
+
+    const response = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001');
+
+    expect(response.summary.currentEarning).toBe('500');
+    expect(response.summary.currentEarningSource).toBe('indexed_events');
+    expect(response.summary.earning30d).toBe('0');
+    expect(response.summary.earning30dSource).toBe('unavailable');
+    expect(response.summary.totalValueChange.source).toBe('indexed_events');
+    expect(response.dataQuality.sources.earnings).toBe('indexed_events');
+  });
+
+  it('uses live claimables in portfolio overview preview and summary', async () => {
+    const { service, claimablesRepository } = await createService({
+      claimables: [
+        {
+          id: 'refund-42',
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          marketAddress: LIVE_MARKET.address,
+          marketSymbol: 'mEDGE',
+          date: '2026-04-14T00:00:00.000Z',
+          type: 'refund',
+          amount: '99800',
+          token: LIVE_MARKET.baseTokenAddress,
+          action: { label: 'Refund', enabled: true, reason: null },
+          source: 'db',
+        },
+      ],
+    });
+
+    const response = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001');
+
+    expect(claimablesRepository.findByWallet).toHaveBeenCalledWith('0xabcdef0000000000000000000000000000000001', 'mEDGE');
+    expect(response.claimableItems).toEqual([
+      expect.objectContaining({
+        id: 'refund-42',
+        type: 'refund',
+        source: 'db',
+      }),
+    ]);
+    expect(response.summary.claimable).toEqual({
+      amount: '99800',
+      token: 'USDC',
+      source: 'db',
+    });
+    expect(response.dataQuality.sources.claimableItems).toBe('db');
+  });
+
   it('returns zero totals and no positions when live balances are empty', async () => {
     const { service } = await createService({ positions: [] });
 
@@ -258,7 +356,7 @@ describe('PortfolioService', () => {
     expect(portfolio.portfolioMetrics).toEqual({
       totalValue: '0',
       netApy: '0',
-      netApySource: 'placeholder',
+      netApySource: 'unavailable',
     });
   });
 
@@ -354,6 +452,43 @@ describe('PortfolioService', () => {
     expect(response.page).toEqual({ limit: 1, nextCursor: '1', hasMore: true });
   });
 
+  it('labels unavailable overview financial aggregates without mock fallback by default', async () => {
+    const previousMockFallback = process.env['PORTFOLIO_MOCK_FALLBACK'];
+    process.env['PORTFOLIO_MOCK_FALLBACK'] = 'true';
+    const { service } = await createService({ fakeDb: { depositRequestRows: [] } });
+
+    try {
+      const response = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001');
+
+      expect(response.summary.totalValueChange).toEqual({
+        amount: '0',
+        percent: '0',
+        source: 'unavailable',
+      });
+      expect(response.summary.currentEarning).toBe('0');
+      expect(response.summary.currentEarningSource).toBe('unavailable');
+      expect(response.summary.earning30d).toBe('0');
+      expect(response.summary.earning30dSource).toBe('unavailable');
+      expect(response.summary.claimable).toEqual({
+        amount: '0',
+        token: 'USDC',
+        source: 'unavailable',
+      });
+      expect(response.portfolioMetrics).toEqual({
+        totalValue: '150000000000000000000',
+        netApy: '0',
+        netApySource: 'unavailable',
+      });
+      expect(response.dataQuality.mockedSections).toEqual([]);
+    } finally {
+      if (previousMockFallback === undefined) {
+        delete process.env['PORTFOLIO_MOCK_FALLBACK'];
+      } else {
+        process.env['PORTFOLIO_MOCK_FALLBACK'] = previousMockFallback;
+      }
+    }
+  });
+
   it('uses mock opt-in for full initial UI previews without generating heavy chart data', async () => {
     const { service } = await createService({ fakeDb: { depositRequestRows: [] } });
 
@@ -415,14 +550,185 @@ describe('PortfolioService', () => {
     expect(response.dataQuality.sources.earnings).toBe('mock');
   });
 
-  it('returns empty earnings when mock is not enabled', async () => {
-    const { service } = await createService();
+  it('returns live earnings from cost basis and live positions', async () => {
+    const { service, earningsRepository } = await createService({
+      positions: [
+        {
+          marketAddress: LIVE_MARKET.address,
+          marketSymbol: 'mEDGE',
+          assetType: 'senior',
+          assetSymbol: 'st-mEDGE',
+          tokenAddress: LIVE_MARKET.seniorTrancheAddress,
+          shares: '100',
+          assets: '100',
+          value: '1300',
+        },
+      ],
+      costBasisRows: [
+        {
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          marketAddress: LIVE_MARKET.address,
+          tranche: 'senior',
+          openShares: '100',
+          openCostBasis: '1000',
+          realizedPnl: '200',
+          depositedValue: '1000',
+          withdrawnValue: '600',
+          dataQuality: 'full',
+        },
+      ],
+    });
 
     const response = await service.getEarnings('0xABCDEF0000000000000000000000000000000001');
 
-    expect(response.earnings).toEqual([]);
+    expect(earningsRepository.findCostBasis).toHaveBeenCalledWith('0xabcdef0000000000000000000000000000000001');
+    expect(response.earnings).toEqual([
+      expect.objectContaining({
+        marketAddress: LIVE_MARKET.address,
+        assetType: 'senior',
+        lifetime: '500',
+        earning30d: '0',
+        source: 'indexed_events',
+      }),
+    ]);
     expect(response.history.series).toEqual([]);
+    expect(response.dataQuality.sources.earnings).toBe('indexed_events');
+    expect(response.dataQuality.sources.earningsHistory).toBe('unavailable');
     expect(response.dataQuality.historyAvailable).toBe(false);
+  });
+
+  it('returns empty unavailable earnings by default without mock rows', async () => {
+    const previousMockFallback = process.env['PORTFOLIO_MOCK_FALLBACK'];
+    process.env['PORTFOLIO_MOCK_FALLBACK'] = 'true';
+    const { service } = await createService();
+
+    try {
+      const response = await service.getEarnings('0xABCDEF0000000000000000000000000000000001');
+
+      expect(response).toEqual({
+        walletAddress: '0xabcdef0000000000000000000000000000000001',
+        earnings: [],
+        history: {
+          range: '30d',
+          granularity: 'day',
+          series: [],
+        },
+        dataQuality: {
+          earningsEstimated: false,
+          historyAvailable: false,
+          activityIndexedUntilBlock: null,
+          mockEnabled: false,
+          mockedSections: [],
+          sources: {
+            positions: 'live',
+            pendingRequests: 'db',
+            earnings: 'unavailable',
+            earningsHistory: 'unavailable',
+            claimableItems: 'unavailable',
+            recentActivities: 'unavailable',
+          },
+        },
+      });
+    } finally {
+      if (previousMockFallback === undefined) {
+        delete process.env['PORTFOLIO_MOCK_FALLBACK'];
+      } else {
+        process.env['PORTFOLIO_MOCK_FALLBACK'] = previousMockFallback;
+      }
+    }
+  });
+
+  it('preserves explicit includeMock earnings fixture mode for FE sandbox only', async () => {
+    const { service } = await createService();
+
+    const response = await service.getEarnings('0xABCDEF0000000000000000000000000000000001', {
+      includeMock: true,
+      range: '7d',
+      granularity: 'day',
+    });
+
+    expect(response.earnings).toHaveLength(3);
+    expect(response.earnings.every((item) => item.source === 'mock')).toBe(true);
+    expect(response.history.series).toHaveLength(2);
+    expect(response.dataQuality.mockEnabled).toBe(true);
+    expect(response.dataQuality.mockedSections).toEqual(
+      expect.arrayContaining(['earnings', 'earningsHistory']),
+    );
+  });
+
+  it('returns rejected unrefunded deposit requests as live claimables', async () => {
+    const { service, claimablesRepository } = await createService({
+      claimables: [
+        {
+          id: 'refund-42',
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          marketAddress: LIVE_MARKET.address,
+          marketSymbol: 'mEDGE',
+          date: '2026-04-14T00:00:00.000Z',
+          type: 'refund',
+          amount: '99800',
+          token: LIVE_MARKET.baseTokenAddress,
+          action: { label: 'Refund', enabled: true, reason: null },
+          source: 'db',
+        },
+      ],
+    });
+
+    const response = await service.getClaimables('0xABCDEF0000000000000000000000000000000001');
+
+    expect(claimablesRepository.findByWallet).toHaveBeenCalledWith('0xabcdef0000000000000000000000000000000001', 'mEDGE');
+    expect(response.items).toHaveLength(1);
+    expect(response.items[0]).toEqual(
+      expect.objectContaining({
+        id: 'refund-42',
+        type: 'refund',
+        source: 'db',
+      }),
+    );
+  });
+
+  it('returns empty claimables by default without mock rows', async () => {
+    const previousMockFallback = process.env['PORTFOLIO_MOCK_FALLBACK'];
+    process.env['PORTFOLIO_MOCK_FALLBACK'] = 'true';
+    const { service } = await createService();
+
+    try {
+      const response = await service.getClaimables('0xABCDEF0000000000000000000000000000000001');
+
+      expect(response).toEqual({
+        walletAddress: '0xabcdef0000000000000000000000000000000001',
+        items: [],
+        page: {
+          limit: 20,
+          nextCursor: null,
+          hasMore: false,
+        },
+      });
+    } finally {
+      if (previousMockFallback === undefined) {
+        delete process.env['PORTFOLIO_MOCK_FALLBACK'];
+      } else {
+        process.env['PORTFOLIO_MOCK_FALLBACK'] = previousMockFallback;
+      }
+    }
+  });
+
+  it('preserves explicit includeMock claimables fixture mode for FE sandbox only', async () => {
+    const { service } = await createService();
+
+    const response = await service.getClaimables('0xABCDEF0000000000000000000000000000000001', {
+      includeMock: true,
+      limit: 2,
+    });
+
+    expect(response.items).toHaveLength(2);
+    expect(response.items.every((item) => item.source === 'mock')).toBe(true);
+    expect(response.items.every((item) => !item.action.enabled)).toBe(true);
+    expect(response.page).toEqual({
+      limit: 2,
+      nextCursor: '2',
+      hasMore: true,
+    });
   });
 
   it('returns paginated mock claimables and activities for lazy FE sections', async () => {

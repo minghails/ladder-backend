@@ -6,5 +6,7 @@ export { priceReportsRaw } from './price-reports-raw';
 export { priceUpdates } from './price-updates';
 export { depositRequests } from './deposit-requests';
 export { portfolioPositions } from './portfolio-positions';
+export { portfolioCashflows } from './portfolio-cashflows';
+export { portfolioCostBasis } from './portfolio-cost-basis';
 export { riskAlerts } from './risk-alerts';
 export { operatorActions } from './operator-actions';
