@@ -92,6 +92,50 @@ describe('ContractReaderService', () => {
     );
   });
 
+  it('previews redeemed assets from selected tranche contract', async () => {
+    const readContract = vi.fn().mockResolvedValue(480000000000000000n);
+    const service = new ContractReaderService({
+      getPublicClient: () => ({ readContract }),
+    } as never);
+
+    const result = await service.previewRedeem({
+      trancheToken: '0x0000000000000000000000000000000000000005',
+      tranche: 'junior',
+      shares: '500000000000000000',
+    });
+
+    expect(result).toBe('480000000000000000');
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: '0x0000000000000000000000000000000000000005',
+        functionName: 'previewRedeem',
+        args: [500000000000000000n],
+      }),
+    );
+  });
+
+  it('previews shares required from selected tranche contract', async () => {
+    const readContract = vi.fn().mockResolvedValue(1050000000000000000n);
+    const service = new ContractReaderService({
+      getPublicClient: () => ({ readContract }),
+    } as never);
+
+    const result = await service.previewWithdraw({
+      trancheToken: '0x0000000000000000000000000000000000000005',
+      tranche: 'senior',
+      amountYt: '1000000000000000000',
+    });
+
+    expect(result).toBe('1050000000000000000');
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: '0x0000000000000000000000000000000000000005',
+        functionName: 'previewWithdraw',
+        args: [1000000000000000000n],
+      }),
+    );
+  });
+
   it('maps undecoded ERC20 insufficient allowance selector from viem raw revert', async () => {
     const error = {
       shortMessage: 'The contract function "depositInstant" reverted with the following signature:\n0xfb8f41b2',

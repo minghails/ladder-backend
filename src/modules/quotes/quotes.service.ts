@@ -279,7 +279,18 @@ export class QuotesService {
           : juniorCapacityExceeded
             ? 'JUNIOR_WITHDRAWAL_CAPACITY_EXCEEDED'
             : null;
-    const outputEstimateType = mode === 'assets' ? 'derived' : 'derived_identity';
+    const preview = mode === 'shares'
+      ? await this.quoteSimulation.previewRedeem({
+          trancheToken: token,
+          tranche: request.tranche,
+          shares: amount,
+        })
+      : await this.quoteSimulation.previewWithdraw({
+          trancheToken: token,
+          tranche: request.tranche,
+          amountYt: amount,
+        });
+    const outputEstimateType = 'live_contract_preview';
 
     if (juniorCapacityExceeded) {
       warnings.push('JUNIOR_WITHDRAWAL_CAPACITY_EXCEEDED');
@@ -298,7 +309,8 @@ export class QuotesService {
       },
       output: {
         token: live.ytTokenAddress,
-        amount,
+        amount: mode === 'shares' ? preview : amount,
+        ...(mode === 'shares' ? { shares: amount } : { sharesRequired: preview }),
         estimateType: outputEstimateType,
       },
       availability: {

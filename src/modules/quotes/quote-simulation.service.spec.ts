@@ -11,6 +11,8 @@ describe('QuoteSimulationService', () => {
         sharesOut: '998000000000000000',
       }),
       previewDeposit: vi.fn().mockResolvedValue('950000000000000000'),
+      previewRedeem: vi.fn().mockResolvedValue('480000000000000000'),
+      previewWithdraw: vi.fn().mockResolvedValue('1050000000000000000'),
     };
 
     return {
@@ -55,6 +57,34 @@ describe('QuoteSimulationService', () => {
 
     expect(contractReader.previewDeposit).toHaveBeenCalledWith(input);
     expect(result).toBe('950000000000000000');
+  });
+
+  it('delegates redeem preview to contract reader', async () => {
+    const { service, contractReader } = createService();
+    const input = {
+      trancheToken: '0x0000000000000000000000000000000000000005',
+      tranche: 'junior' as const,
+      shares: '500000000000000000',
+    };
+
+    const result = await service.previewRedeem(input);
+
+    expect(contractReader.previewRedeem).toHaveBeenCalledWith(input);
+    expect(result).toBe('480000000000000000');
+  });
+
+  it('delegates withdraw preview to contract reader', async () => {
+    const { service, contractReader } = createService();
+    const input = {
+      trancheToken: '0x0000000000000000000000000000000000000005',
+      tranche: 'senior' as const,
+      amountYt: '1000000000000000000',
+    };
+
+    const result = await service.previewWithdraw(input);
+
+    expect(contractReader.previewWithdraw).toHaveBeenCalledWith(input);
+    expect(result).toBe('1050000000000000000');
   });
 
   it('preserves mapped simulation reverts', async () => {

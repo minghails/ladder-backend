@@ -7,9 +7,9 @@
 ## Current status
 
 - Status: implementation in progress
-- Active epic: `epics/2026-05-07-quote-production-accuracy.md`
-- Active slice: Slice 3 — withdraw YT quote previews
-- Latest session log: `sessions/2026-05-07-deposit-yt-quote-previews.md`
+- Active epic: `epics/2026-05-07-portfolio-read-models.md`
+- Active slice: Slice 1 — validate projector event coverage
+- Latest session log: `sessions/2026-05-07-withdraw-yt-quote-previews.md`
 
 ## Execution rules
 
@@ -26,8 +26,8 @@
 |---|---|---|
 | Mock removal guardrails | `epics/2026-05-07-mock-removal-guardrails.md` | completed |
 | Market metadata, APY, factsheet, charts | `epics/2026-05-07-market-metadata-apy-charts.md` | completed |
-| Quote production accuracy | `epics/2026-05-07-quote-production-accuracy.md` | active |
-| Portfolio read models without mocks | `epics/2026-05-07-portfolio-read-models.md` | pending |
+| Quote production accuracy | `epics/2026-05-07-quote-production-accuracy.md` | completed |
+| Portfolio read models without mocks | `epics/2026-05-07-portfolio-read-models.md` | active |
 | Verification and release gates | `epics/2026-05-07-verification-release-gates.md` | pending |
 
 ## Slice backlog
@@ -54,13 +54,13 @@
 |---|---|---|
 | Slice 1 — quote simulation service extraction | completed | Base instant simulation moved behind `QuoteSimulationService`; quote response behavior preserved. |
 | Slice 2 — deposit YT quote previews | completed | `sharesOut` now uses tranche `previewDeposit(amountYt)` with live preview source labels. |
-| Slice 3 — withdraw YT quote previews | active | use `previewRedeem` / `previewWithdraw` |
+| Slice 3 — withdraw YT quote previews | completed | `output` now uses tranche `previewRedeem` / `previewWithdraw` with live preview source labels. |
 
 ### Epic 4: Portfolio read models without mocks
 
 | Slice | Status | Notes |
 |---|---|---|
-| Slice 1 — validate projector event coverage | pending | projection completeness + partial history |
+| Slice 1 — validate projector event coverage | active | projection completeness + partial history |
 | Slice 2 — production portfolio overview | pending | no mock summary/default rows |
 | Slice 3 — production earnings/history | pending | real snapshots/cashflows only |
 | Slice 4 — production claimables, requests, activities | pending | DB/indexed rows only |
@@ -87,3 +87,5 @@
 | 2026-05-07 | Epic 2 API impact summary | completed | API contract change | Market endpoints now expose live token metadata source labels, tranche `apySource`, production factsheet row sources, and indexed/unavailable chart sources. FE follow-ups: update market/factsheet/chart fixtures and read source labels for APY/yield availability. |
 | 2026-05-07 | Epic 3 Slice 1 — quote simulation service extraction | completed | No FE-facing API impact | Extracted base instant simulation delegation into `QuoteSimulationService`; existing deposit-base quote response shape, action hints, and source labels preserved. Architecture docs checked; no update needed. |
 | 2026-05-07 | Epic 3 Slice 2 — deposit YT quote previews | completed | API data-source/behavior change | `POST /quotes/deposit-yt` now uses selected tranche `previewDeposit(amountYt)` for `estimate.sharesOut`; NAV/risk constraints remain derived and no sender/calldata is required. Canonical API docs updated. Architecture docs checked; no update needed. |
+| 2026-05-07 | Epic 3 Slice 3 — withdraw YT quote previews | completed | API data-source/behavior change | `POST /quotes/withdraw-yt` now uses selected tranche `previewRedeem(shares)` and `previewWithdraw(assets)` for output estimates; junior withdrawal capacity remains derived. Canonical API docs updated. Architecture docs checked; no update needed. |
+| 2026-05-07 | Epic 3 API impact summary | completed | API data-source/behavior change | Quote endpoints now distinguish live contract reads, simulations, live tranche previews, and derived constraints. Deposit YT and withdraw YT preview outputs can differ from prior identity/derived fixture assumptions, but endpoint paths, requests, action hints, and response containers remain stable. FE follow-ups: update quote fixtures/source-label handling; no required transaction-building change. |

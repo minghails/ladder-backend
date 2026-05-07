@@ -80,6 +80,18 @@ export interface PreviewDepositInput {
   amountYt: string;
 }
 
+export interface PreviewRedeemInput {
+  trancheToken: string;
+  tranche: 'senior' | 'junior';
+  shares: string;
+}
+
+export interface PreviewWithdrawInput {
+  trancheToken: string;
+  tranche: 'senior' | 'junior';
+  amountYt: string;
+}
+
 const SCALE = 10n ** 18n;
 
 function toStringValue(value: bigint | number | string | boolean): string {
@@ -92,6 +104,10 @@ function toAddress(value: unknown): Address {
 
 function computeValue(assets: bigint, latestYtPrice: bigint): string {
   return ((assets * latestYtPrice) / SCALE).toString();
+}
+
+function trancheAbi(tranche: 'senior' | 'junior') {
+  return tranche === 'senior' ? ST_TRANCHE_ABI : JT_TRANCHE_ABI;
 }
 
 function mapSimulationRevertReason(error: unknown): { reason: string; errorName: string | null } {
@@ -245,8 +261,32 @@ export class ContractReaderService {
     const client = this.viem.getPublicClient();
     const shares = await client.readContract({
       address: input.trancheToken as Address,
-      abi: input.tranche === 'senior' ? ST_TRANCHE_ABI : JT_TRANCHE_ABI,
+      abi: trancheAbi(input.tranche),
       functionName: 'previewDeposit',
+      args: [BigInt(input.amountYt)],
+    });
+
+    return shares.toString();
+  }
+
+  async previewRedeem(input: PreviewRedeemInput): Promise<string> {
+    const client = this.viem.getPublicClient();
+    const assets = await client.readContract({
+      address: input.trancheToken as Address,
+      abi: trancheAbi(input.tranche),
+      functionName: 'previewRedeem',
+      args: [BigInt(input.shares)],
+    });
+
+    return assets.toString();
+  }
+
+  async previewWithdraw(input: PreviewWithdrawInput): Promise<string> {
+    const client = this.viem.getPublicClient();
+    const shares = await client.readContract({
+      address: input.trancheToken as Address,
+      abi: trancheAbi(input.tranche),
+      functionName: 'previewWithdraw',
       args: [BigInt(input.amountYt)],
     });
 
