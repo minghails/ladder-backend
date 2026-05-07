@@ -8,8 +8,8 @@
 
 - Status: implementation in progress
 - Active epic: `epics/2026-05-07-market-metadata-apy-charts.md`
-- Active slice: Slice 2 — APY snapshots and APY service
-- Latest session log: `sessions/2026-05-07-live-token-metadata-reads.md`
+- Active slice: Slice 3 — production factsheet service
+- Latest session log: `sessions/2026-05-07-apy-snapshots-service.md`
 
 ## Execution rules
 
@@ -44,8 +44,8 @@
 | Slice | Status | Notes |
 |---|---|---|
 | Slice 1 — live token metadata reads | completed | Added ERC20 metadata reads; base token address remains config/deployment source, symbol/decimals live ERC20 metadata. |
-| Slice 2 — APY snapshots and APY service | active | `convertToAssets(1e18)` snapshots |
-| Slice 3 — production factsheet service | pending | every row sourced |
+| Slice 2 — APY snapshots and APY service | completed | `market_snapshots` now stores ST/JT share prices from `convertToAssets(1e18)` and market APY uses indexed snapshots or unavailable fallback. |
+| Slice 3 — production factsheet service | active | every row sourced |
 | Slice 4 — production chart source behavior | pending | utilization unavailable, yield from APY snapshots |
 
 ### Epic 3: Quote production accuracy
@@ -81,3 +81,4 @@
 | 2026-05-07 | Slice 1 — production mock policy helper | completed | API data-source/behavior change | Portfolio `includeMock=true` now returns mock rows only when `PORTFOLIO_MOCK_FALLBACK=true` and `NODE_ENV !== 'production'`; canonical API docs updated. Architecture docs checked; no update needed. |
 | 2026-05-07 | Slice 2 — remove production chart fixtures | completed | No FE-facing API impact | Chart fixture values/series removed from config; existing chart API behavior preserved: indexed metrics use snapshots, yield/utilization unavailable. Architecture docs checked; no update needed. |
 | 2026-05-07 | Epic 2 Slice 1 — live token metadata reads | completed | API data-source/behavior change | Base token symbol/decimals now use live ERC20 metadata reads; `trade-constraints` token source label changed to `config_address_live_metadata`; canonical API docs updated. Architecture docs checked; no update needed. |
+| 2026-05-07 | Epic 2 Slice 2 — APY snapshots and APY service | completed | API contract change | Added `apySource` to market tranche objects and APY now comes from indexed tranche share-price snapshots when available; canonical API and backend architecture docs updated. |

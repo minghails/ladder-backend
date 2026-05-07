@@ -22,6 +22,8 @@ export const marketSnapshots = pgTable(
     navJt: text('nav_jt').notNull(),
     jtStRatio: text('jt_st_ratio').notNull(),
     ytPrice: text('yt_price').notNull(),
+    stSharePrice: text('st_share_price').notNull(),
+    jtSharePrice: text('jt_share_price').notNull(),
     halted: text('halted').notNull(),
     blockNumber: text('block_number').notNull(),
     blockHash: varchar('block_hash', { length: 66 }).notNull(),

@@ -15,8 +15,11 @@ export class MarketTrancheDto {
   @ApiProperty({ description: 'Live tranche token symbol read from the tranche contract.', example: 'st-mEDGE' })
   symbol!: string;
 
-  @ApiProperty({ description: 'Current backend placeholder APY as a decimal string. Live APY calculation is not implemented yet, so runtime currently returns 0.', example: '0' })
+  @ApiProperty({ description: 'Tranche APY as a decimal string, computed from indexed tranche share-price snapshots when available. Returns 0 when unavailable.', example: '0.121666666666666666' })
   apy!: string;
+
+  @ApiProperty({ description: 'APY data source. unavailable means APY is a display fallback, not live yield.', enum: ['indexed_snapshots', 'unavailable'], example: 'indexed_snapshots' })
+  apySource!: 'indexed_snapshots' | 'unavailable';
 
   @ApiProperty({ description: 'Live tranche NAV/TVL in raw token precision as a string, read from the Market contract. FE should format according to token decimals.', example: '30000000000000000000000000' })
   tvl!: string;

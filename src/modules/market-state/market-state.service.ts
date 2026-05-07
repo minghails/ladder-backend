@@ -11,6 +11,7 @@ import {
   PRICE_STALE_SECONDS,
   unixSecondsToIso,
 } from './market-calculations';
+import { MarketApyService, type MarketApyResult } from './market-apy.service';
 import {
   BASE_SEPOLIA_MARKET_NETWORK,
   MARKET_CHART_CONFIG,
@@ -29,6 +30,7 @@ export interface MarketNetworkDto {
 export interface MarketTrancheDto {
   symbol: string;
   apy: string;
+  apySource: 'indexed_snapshots' | 'unavailable';
   tvl: string;
 }
 
@@ -155,7 +157,7 @@ function statusWarnings(live: LiveMarketState): string[] {
   return [...(live.halted ? ['MARKET_HALTED'] : []), ...(isPriceStale(live.lastUpdatedTime) ? ['STALE_PRICE'] : [])];
 }
 
-async function toMarketDetail(live: LiveMarketState, contractReader: ContractReaderService): Promise<MarketDetailDto> {
+async function toMarketDetail(live: LiveMarketState, contractReader: ContractReaderService, apy: MarketApyResult): Promise<MarketDetailDto> {
   const marketSymbol = stripTranchePrefix(live.seniorSymbol);
   const stalePrice = isPriceStale(live.lastUpdatedTime);
   const baseTokenMetadata = await contractReader.getTokenMetadata(live.baseTokenAddress);
@@ -169,12 +171,14 @@ async function toMarketDetail(live: LiveMarketState, contractReader: ContractRea
     totalTvl: live.nav,
     senior: {
       symbol: live.seniorSymbol,
-      apy: '0',
+      apy: apy.senior.apy,
+      apySource: apy.senior.source,
       tvl: live.navSt,
     },
     junior: {
       symbol: live.juniorSymbol,
-      apy: '0',
+      apy: apy.junior.apy,
+      apySource: apy.junior.source,
       tvl: live.navJt,
     },
     ratio: {
@@ -219,13 +223,15 @@ async function toMarketDetail(live: LiveMarketState, contractReader: ContractRea
 export class MarketStateService {
   constructor(
     private readonly contractReader: ContractReaderService,
+    private readonly apyService: MarketApyService,
     @Optional()
     @Inject(DRIZZLE_DB)
     private readonly db?: MarketStateDatabase,
   ) {}
 
   async listMarkets(): Promise<MarketListResponseDto> {
-    const market = await toMarketDetail(await this.contractReader.getMarketState(), this.contractReader);
+    const live = await this.contractReader.getMarketState();
+    const market = await toMarketDetail(live, this.contractReader, await this.marketApy(live.address));
 
     return {
       markets: [toListItem(market)],
@@ -233,7 +239,8 @@ export class MarketStateService {
   }
 
   async getMarket(address: string): Promise<MarketDetailDto> {
-    return toMarketDetail(await this.getLiveMarket(address), this.contractReader);
+    const live = await this.getLiveMarket(address);
+    return toMarketDetail(live, this.contractReader, await this.marketApy(live.address));
   }
 
   async getDepositLimits(address: string) {
@@ -427,6 +434,11 @@ export class MarketStateService {
         },
       },
     };
+  }
+
+  private async marketApy(address: string): Promise<MarketApyResult> {
+    const snapshots = await this.readSnapshotRows(address);
+    return this.apyService.calculate(snapshots);
   }
 
   private async getLiveMarket(address: string): Promise<LiveMarketState> {

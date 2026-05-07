@@ -9,8 +9,8 @@ Active initiative: `backend/docs/initiatives/production-endpoint-readiness/`
 Active tracker: `backend/docs/initiatives/production-endpoint-readiness/tracker.md`
 Active plan: `backend/docs/plans/2026-05-07-production-endpoint-readiness.md`
 Active epic: `backend/docs/initiatives/production-endpoint-readiness/epics/2026-05-07-market-metadata-apy-charts.md`
-Active slice: Slice 2 — APY snapshots and APY service.
-Latest session log: `backend/docs/initiatives/production-endpoint-readiness/sessions/2026-05-07-live-token-metadata-reads.md`
+Active slice: Slice 3 — production factsheet service.
+Latest session log: `backend/docs/initiatives/production-endpoint-readiness/sessions/2026-05-07-apy-snapshots-service.md`
 
 Do not scan unrelated backend plans, initiatives, sessions, or raw docs. Read only:
 1. `AGENTS.md`
@@ -20,27 +20,24 @@ Do not scan unrelated backend plans, initiatives, sessions, or raw docs. Read on
 5. `backend/docs/initiatives/production-endpoint-readiness/tracker.md`
 6. `backend/docs/initiatives/production-endpoint-readiness/epics/2026-05-07-market-metadata-apy-charts.md`
 7. latest session log named above
-8. source files needed for Slice 2 only.
+8. source files needed for Slice 3 only.
 
-Work one bounded slice only: APY snapshots and APY service.
+Work one bounded slice only: production factsheet service.
 
-Slice 2 scope:
-- Add APY snapshot source for `st.convertToAssets(1e18)` and `jt.convertToAssets(1e18)`.
-- Add repository/service to compute ST/JT APY from valid snapshot pairs.
-- Use compound annualized formula if practical; simple annualized fallback allowed by plan.
-- Return `unavailable` with fewer than 2 valid points.
+Slice 3 scope:
+- Split factsheet fields into live/config/unavailable.
+- Remove rows that cannot be sourced truthfully.
+- Ensure every row has a source.
 
 Likely files:
-- `backend/src/modules/market-state/market-apy.service.ts`
-- `backend/src/modules/market-state/market-analytics.repository.ts`
+- `backend/src/modules/market-state/market-factsheet.service.ts`
 - `backend/src/modules/market-state/market-state.service.ts`
-- optional `backend/src/shared/database/schema/market-apy-snapshots.ts`
-- optional projector snapshot writer files
-- `backend/src/modules/market-state/market-apy.service.spec.ts`
-- `docs/canonical/api-contract.md` if response/source semantics change.
+- `backend/src/modules/market-state/market-metadata.config.ts`
+- `backend/src/modules/market-state/market-factsheet.service.spec.ts`
+- `docs/canonical/api-contract.md` if row semantics change.
 
 Required verification:
-- Targeted APY service/repository tests.
+- Targeted factsheet tests.
 - `pnpm test -- market-state`
 - `pnpm lint` if source changes.
 - Additional tests if touched areas require them.

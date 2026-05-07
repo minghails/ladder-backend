@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { marketSnapshots } from '@shared/database/schema';
+import { MarketApyService } from './market-apy.service';
 import { MARKET_CHART_CONFIG } from './market-metadata.config';
 import { MarketStateService } from './market-state.service';
 
@@ -51,6 +52,8 @@ describe('MarketStateService', () => {
       navJt: '4',
       jtStRatio: '1500000000000000000',
       ytPrice: '1000000000000000000',
+      stSharePrice: '1000000000000000000',
+      jtSharePrice: '1000000000000000000',
       halted: 'false',
       blockNumber: '100',
       blockHash:
@@ -84,6 +87,7 @@ describe('MarketStateService', () => {
     const module = await Test.createTestingModule({
       providers: [
         MarketStateService,
+        MarketApyService,
         {
           provide: ContractReaderService,
           useValue: contractReader,
@@ -166,6 +170,42 @@ describe('MarketStateService', () => {
     });
   });
 
+  it('returns unavailable APY when fewer than two APY snapshots exist', async () => {
+    const { service } = await createService(LIVE_MARKET, [snapshotRow()]);
+
+    const detail = await service.getMarket(LIVE_MARKET.address);
+
+    expect(detail.senior.apy).toBe('0');
+    expect(detail.senior.apySource).toBe('unavailable');
+    expect(detail.junior.apy).toBe('0');
+    expect(detail.junior.apySource).toBe('unavailable');
+  });
+
+  it('returns indexed APY from tranche share-price snapshots', async () => {
+    const { service } = await createService(LIVE_MARKET, [
+      snapshotRow({
+        stSharePrice: '1000000000000000000',
+        jtSharePrice: '1000000000000000000',
+        snapshotAt: new Date('2026-04-01T00:00:00.000Z'),
+      }),
+      snapshotRow({
+        id: 2,
+        blockNumber: '101',
+        sourceLogIndex: '1',
+        stSharePrice: '1010000000000000000',
+        jtSharePrice: '1030000000000000000',
+        snapshotAt: new Date('2026-05-01T00:00:00.000Z'),
+      }),
+    ]);
+
+    const detail = await service.getMarket(LIVE_MARKET.address);
+
+    expect(detail.senior.apy).toBe('0.121666666666666666');
+    expect(detail.senior.apySource).toBe('indexed_snapshots');
+    expect(detail.junior.apy).toBe('0.365');
+    expect(detail.junior.apySource).toBe('indexed_snapshots');
+  });
+
   it('uses live ERC20 metadata for base token symbol and decimals', async () => {
     const { service, contractReader } = await createService(LIVE_MARKET, [], {
       address: LIVE_MARKET.baseTokenAddress,
@@ -198,6 +238,7 @@ describe('MarketStateService', () => {
     const module = await Test.createTestingModule({
       providers: [
         MarketStateService,
+        MarketApyService,
         {
           provide: ContractReaderService,
           useValue: contractReader,

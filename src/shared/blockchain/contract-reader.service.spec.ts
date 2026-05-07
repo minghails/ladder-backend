@@ -48,6 +48,28 @@ describe('ContractReaderService', () => {
     vi.restoreAllMocks();
   });
 
+  it('reads tranche share prices from convertToAssets(1e18)', async () => {
+    const readContract = vi.fn()
+      .mockResolvedValueOnce('0x0000000000000000000000000000000000000005')
+      .mockResolvedValueOnce('0x0000000000000000000000000000000000000006')
+      .mockResolvedValueOnce(1010000000000000000n)
+      .mockResolvedValueOnce(970000000000000000n);
+    const service = new ContractReaderService({
+      getMarketAddress: () => '0x0000000000000000000000000000000000000001',
+      getPublicClient: () => ({ readContract }),
+    } as never);
+
+    const result = await service.getMarketTrancheSharePrices();
+
+    expect(result).toEqual({
+      stSharePrice: '1010000000000000000',
+      jtSharePrice: '970000000000000000',
+    });
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: 'convertToAssets', args: [1000000000000000000n] }),
+    );
+  });
+
   it('maps undecoded ERC20 insufficient allowance selector from viem raw revert', async () => {
     const error = {
       shortMessage: 'The contract function "depositInstant" reverted with the following signature:\n0xfb8f41b2',

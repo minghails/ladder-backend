@@ -50,6 +50,8 @@ function previousSnapshot(overrides: Partial<typeof marketSnapshots.$inferSelect
     navJt: '1',
     jtStRatio: '1',
     ytPrice: '999',
+    stSharePrice: '1000000000000000000',
+    jtSharePrice: '1000000000000000000',
     halted: 'false',
     blockNumber: '99',
     blockHash: BLOCK_HASH,
@@ -88,6 +90,10 @@ function createProjector({
       latestYtPrice: '1234',
       halted: true,
     }),
+    getMarketTrancheSharePrices: vi.fn().mockResolvedValue({
+      stSharePrice: '1000000000000000000',
+      jtSharePrice: '2000000000000000000',
+    }),
   };
 
   return {
@@ -117,6 +123,8 @@ describe('MarketSnapshotProjector', () => {
         navJt: '4',
         jtStRatio: '1500000000000000000',
         ytPrice: '1000000000000000000',
+        stSharePrice: '1000000000000000000',
+        jtSharePrice: '2000000000000000000',
         halted: 'false',
         blockNumber: '100',
         blockHash: BLOCK_HASH,

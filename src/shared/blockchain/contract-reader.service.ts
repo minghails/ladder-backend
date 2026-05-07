@@ -10,6 +10,11 @@ import {
   MOCK_USDC_ADDRESS,
 } from './contracts';
 
+export interface TrancheSharePrices {
+  stSharePrice: string;
+  jtSharePrice: string;
+}
+
 export interface TokenMetadata {
   address: string;
   symbol: string;
@@ -209,6 +214,24 @@ export class ContractReaderService {
         withdrawBaseAsync,
         withdrawBaseInstant,
       },
+    };
+  }
+
+  async getMarketTrancheSharePrices(): Promise<TrancheSharePrices> {
+    const client = this.viem.getPublicClient();
+    const marketAddress = this.viem.getMarketAddress();
+    const [seniorTrancheAddress, juniorTrancheAddress] = await Promise.all([
+      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'st' }),
+      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'jt' }),
+    ]);
+    const [stSharePrice, jtSharePrice] = await Promise.all([
+      client.readContract({ address: toAddress(seniorTrancheAddress), abi: ST_TRANCHE_ABI, functionName: 'convertToAssets', args: [SCALE] }),
+      client.readContract({ address: toAddress(juniorTrancheAddress), abi: JT_TRANCHE_ABI, functionName: 'convertToAssets', args: [SCALE] }),
+    ]);
+
+    return {
+      stSharePrice: toStringValue(stSharePrice),
+      jtSharePrice: toStringValue(jtSharePrice),
     };
   }
 
