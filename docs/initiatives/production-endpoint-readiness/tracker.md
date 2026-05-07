@@ -8,8 +8,8 @@
 
 - Status: implementation in progress
 - Active epic: `epics/2026-05-07-portfolio-read-models.md`
-- Active slice: Slice 3 — production earnings/history
-- Latest session log: `sessions/2026-05-07-production-portfolio-overview.md`
+- Active slice: Slice 4 — production claimables, requests, activities
+- Latest session log: `sessions/2026-05-07-production-earnings-history.md`
 
 ## Execution rules
 
@@ -62,8 +62,8 @@
 |---|---|---|
 | Slice 1 — validate projector event coverage | completed | Required portfolio projection event coverage documented in tests; replay and partial-history behavior covered. |
 | Slice 2 — production portfolio overview | completed | overview ignores sandbox mock fallback and uses live/DB/unavailable sources only |
-| Slice 3 — production earnings/history | active | real snapshots/cashflows only |
-| Slice 4 — production claimables, requests, activities | pending | DB/indexed rows only |
+| Slice 3 — production earnings/history | completed | earnings use cost basis plus live positions; history uses indexed cashflows or unavailable |
+| Slice 4 — production claimables, requests, activities | active | DB/indexed rows only |
 
 ### Epic 5: Verification and release gates
 
@@ -91,3 +91,4 @@
 | 2026-05-07 | Epic 3 API impact summary | completed | API data-source/behavior change | Quote endpoints now distinguish live contract reads, simulations, live tranche previews, and derived constraints. Deposit YT and withdraw YT preview outputs can differ from prior identity/derived fixture assumptions, but endpoint paths, requests, action hints, and response containers remain stable. FE follow-ups: update quote fixtures/source-label handling; no required transaction-building change. |
 | 2026-05-07 | Epic 4 Slice 1 — validate projector event coverage | completed | No FE-facing API impact | Added explicit required portfolio event coverage contract and tests for deterministic replay and partial-history marking. Architecture docs checked; no update needed. |
 | 2026-05-07 | Epic 4 Slice 2 — production portfolio overview | completed | API data-source/behavior change | `GET /portfolio/:address` now ignores sandbox mock fallback and returns live tranche total value, DB/indexed overview rows, and unavailable source labels for missing earnings/APY values. Canonical API docs updated. Architecture docs checked; no update needed. |
+| 2026-05-07 | Epic 4 Slice 3 — production earnings/history | completed | API data-source/behavior change | `GET /portfolio/:address/earnings` now ignores sandbox mock fallback; earnings table uses cost basis plus live positions, and history uses indexed portfolio cashflows with full/partial/unavailable source labels. Canonical API docs updated. Architecture docs checked; no update needed. |

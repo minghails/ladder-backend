@@ -8,7 +8,7 @@ import {
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { PortfolioActivityRepository } from './portfolio-activity.repository';
 import { PortfolioClaimablesRepository, type PortfolioClaimableDto } from './portfolio-claimables.repository';
-import { PortfolioEarningsRepository, type PortfolioCostBasisDto } from './portfolio-earnings.repository';
+import { PortfolioEarningsRepository, type PortfolioCashflowDto, type PortfolioCostBasisDto } from './portfolio-earnings.repository';
 import { PortfolioService } from './portfolio.service';
 
 type DepositRequestRow = {
@@ -157,6 +157,7 @@ describe('PortfolioService', () => {
     activities = [],
     claimables = [],
     costBasisRows = [],
+    cashflowRows = [],
   }: {
     fakeDb?: FakeDb;
     positions?: LivePortfolioPosition[];
@@ -164,6 +165,7 @@ describe('PortfolioService', () => {
     activities?: Awaited<ReturnType<PortfolioActivityRepository['findByWallet']>>;
     claimables?: PortfolioClaimableDto[];
     costBasisRows?: PortfolioCostBasisDto[];
+    cashflowRows?: PortfolioCashflowDto[];
   } = {}) {
     const contractReader = {
       getPortfolioPositions: vi.fn().mockResolvedValue(positions),
@@ -174,7 +176,7 @@ describe('PortfolioService', () => {
     };
     const earningsRepository = {
       findCostBasis: vi.fn().mockResolvedValue(costBasisRows),
-      findCashflowsSince: vi.fn().mockResolvedValue([]),
+      findCashflowsSince: vi.fn().mockResolvedValue(cashflowRows),
     };
     const claimablesRepository = {
       findByWallet: vi.fn().mockResolvedValue(claimables),
@@ -592,7 +594,7 @@ describe('PortfolioService', () => {
     });
   });
 
-  it('returns mock earnings with controlled range and no pagination-heavy payload', async () => {
+  it('does not return mock earnings or history when sandbox mock fallback is enabled', async () => {
     await withPortfolioMockFallback(async () => {
       const { service } = await createService();
 
@@ -603,10 +605,12 @@ describe('PortfolioService', () => {
       });
 
       expect(response.walletAddress).toBe('0xabcdef0000000000000000000000000000000001');
-      expect(response.earnings.length).toBeGreaterThan(0);
-      expect(response.history.range).toBe('30d');
-      expect(response.history.series[0]?.points).toHaveLength(30);
-      expect(response.dataQuality.sources.earnings).toBe('mock');
+      expect(response.earnings).toEqual([]);
+      expect(response.history).toEqual({ range: '30d', granularity: 'day', series: [] });
+      expect(response.dataQuality.mockEnabled).toBe(false);
+      expect(response.dataQuality.mockedSections).toEqual([]);
+      expect(response.dataQuality.sources.earnings).toBe('unavailable');
+      expect(response.dataQuality.sources.earningsHistory).toBe('unavailable');
     });
   });
 
@@ -657,6 +661,125 @@ describe('PortfolioService', () => {
     expect(response.dataQuality.historyAvailable).toBe(false);
   });
 
+  it('builds earnings history from real cashflows only', async () => {
+    const { service, earningsRepository } = await createService({
+      cashflowRows: [
+        {
+          id: 1,
+          chainId: 84532,
+          marketAddress: LIVE_MARKET.address,
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          tranche: 'senior',
+          type: 'deposit',
+          sharesDelta: '100',
+          assetsDelta: '90',
+          valueDelta: '1000',
+          txHash: '0x0000000000000000000000000000000000000000000000000000000000000001',
+          logIndex: '1',
+          blockNumber: '10',
+          blockTimestamp: new Date('2026-05-01T12:00:00.000Z'),
+          sourceEventName: 'DepositYT',
+          createdAt: new Date('2026-05-01T12:00:01.000Z'),
+        },
+        {
+          id: 2,
+          chainId: 84532,
+          marketAddress: LIVE_MARKET.address,
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          tranche: 'junior',
+          type: 'withdraw',
+          sharesDelta: '-20',
+          assetsDelta: '-18',
+          valueDelta: '-300',
+          txHash: '0x0000000000000000000000000000000000000000000000000000000000000002',
+          logIndex: '2',
+          blockNumber: '11',
+          blockTimestamp: new Date('2026-05-02T12:00:00.000Z'),
+          sourceEventName: 'WithdrawYT',
+          createdAt: new Date('2026-05-02T12:00:01.000Z'),
+        },
+      ],
+      costBasisRows: [
+        {
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          marketAddress: LIVE_MARKET.address,
+          tranche: 'senior',
+          openShares: '100',
+          openCostBasis: '1000',
+          realizedPnl: '0',
+          depositedValue: '1000',
+          withdrawnValue: '0',
+          dataQuality: 'full',
+        },
+      ],
+    });
+
+    const response = await service.getEarnings('0xABCDEF0000000000000000000000000000000001', { range: '7d' });
+
+    expect(earningsRepository.findCashflowsSince).toHaveBeenCalledWith(
+      '0xabcdef0000000000000000000000000000000001',
+      expect.any(Date),
+    );
+    expect(response.history.series).toEqual([
+      {
+        id: 'senior',
+        label: 'Senior Token',
+        points: [{ date: '2026-05-01', value: '1000' }],
+        source: 'indexed_events',
+      },
+      {
+        id: 'junior',
+        label: 'Junior Token',
+        points: [{ date: '2026-05-02', value: '-300' }],
+        source: 'indexed_events',
+      },
+    ]);
+    expect(response.dataQuality.historyAvailable).toBe(true);
+    expect(response.dataQuality.sources.earningsHistory).toBe('indexed_events');
+  });
+
+  it('marks earnings history partial when cost-basis history is partial', async () => {
+    const { service } = await createService({
+      cashflowRows: [
+        {
+          id: 1,
+          chainId: 84532,
+          marketAddress: LIVE_MARKET.address,
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          tranche: 'senior',
+          type: 'withdraw',
+          sharesDelta: '-20',
+          assetsDelta: '-18',
+          valueDelta: '-300',
+          txHash: '0x0000000000000000000000000000000000000000000000000000000000000001',
+          logIndex: '1',
+          blockNumber: '10',
+          blockTimestamp: new Date('2026-05-02T12:00:00.000Z'),
+          sourceEventName: 'WithdrawYT',
+          createdAt: new Date('2026-05-02T12:00:01.000Z'),
+        },
+      ],
+      costBasisRows: [
+        {
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          marketAddress: LIVE_MARKET.address,
+          tranche: 'senior',
+          openShares: '0',
+          openCostBasis: '0',
+          realizedPnl: '-300',
+          depositedValue: '0',
+          withdrawnValue: '300',
+          dataQuality: 'partial',
+        },
+      ],
+    });
+
+    const response = await service.getEarnings('0xABCDEF0000000000000000000000000000000001', { range: '7d' });
+
+    expect(response.history.series[0]?.source).toBe('partial_indexed_events');
+    expect(response.dataQuality.sources.earningsHistory).toBe('partial_indexed_events');
+  });
+
   it('returns empty unavailable earnings by default without mock rows', async () => {
     const previousMockFallback = process.env['PORTFOLIO_MOCK_FALLBACK'];
     process.env['PORTFOLIO_MOCK_FALLBACK'] = 'true';
@@ -698,7 +821,7 @@ describe('PortfolioService', () => {
     }
   });
 
-  it('preserves explicit includeMock earnings fixture mode for FE sandbox only', async () => {
+  it('keeps earnings unavailable when includeMock is requested without real rows', async () => {
     await withPortfolioMockFallback(async () => {
       const { service } = await createService();
 
@@ -708,13 +831,10 @@ describe('PortfolioService', () => {
         granularity: 'day',
       });
 
-      expect(response.earnings).toHaveLength(3);
-      expect(response.earnings.every((item) => item.source === 'mock')).toBe(true);
-      expect(response.history.series).toHaveLength(2);
-      expect(response.dataQuality.mockEnabled).toBe(true);
-      expect(response.dataQuality.mockedSections).toEqual(
-        expect.arrayContaining(['earnings', 'earningsHistory']),
-      );
+      expect(response.earnings).toEqual([]);
+      expect(response.history.series).toEqual([]);
+      expect(response.dataQuality.mockEnabled).toBe(false);
+      expect(response.dataQuality.mockedSections).toEqual([]);
     });
   });
 

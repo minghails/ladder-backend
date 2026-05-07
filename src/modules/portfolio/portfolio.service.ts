@@ -5,7 +5,7 @@ import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { depositRequests } from '@shared/database/schema';
 import { PortfolioActivityRepository } from './portfolio-activity.repository';
 import { PortfolioClaimablesRepository } from './portfolio-claimables.repository';
-import { PortfolioEarningsRepository, type PortfolioCostBasisDto } from './portfolio-earnings.repository';
+import { PortfolioEarningsRepository, type PortfolioCashflowDto, type PortfolioCostBasisDto } from './portfolio-earnings.repository';
 import { portfolioMockEnabled } from './portfolio-production-mode';
 
 export type PortfolioDataSource = 'live' | 'db' | 'mock' | 'placeholder' | 'unavailable' | 'derived' | 'indexed_events' | 'partial_indexed_events';
@@ -543,41 +543,6 @@ function mockActivities(liveMarketAddress: string): PortfolioActivityDto[] {
   ];
 }
 
-function mockEarnings(liveMarketAddress: string): PortfolioEarningDto[] {
-  return [
-    {
-      id: 'mock-earning-token-a-senior',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token A',
-      assetType: 'senior',
-      assetSymbol: 'Senior Token',
-      lifetime: '834000000000000000000',
-      earning30d: '139000000000000000000',
-      source: 'mock',
-    },
-    {
-      id: 'mock-earning-token-a-junior',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token A',
-      assetType: 'junior',
-      assetSymbol: 'Junior Token',
-      lifetime: '1436000000000000000000',
-      earning30d: '402000000000000000000',
-      source: 'mock',
-    },
-    {
-      id: 'mock-earning-token-c-junior',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token C',
-      assetType: 'junior',
-      assetSymbol: 'Junior Token',
-      lifetime: '873000000000000000000',
-      earning30d: '119000000000000000000',
-      source: 'mock',
-    },
-  ];
-}
-
 function rangeDays(range: EarningsRange): number {
   switch (range) {
     case '7d':
@@ -589,25 +554,55 @@ function rangeDays(range: EarningsRange): number {
   }
 }
 
-function mockEarningsHistory(range: EarningsRange, granularity: EarningsGranularity): PortfolioEarningsHistoryDto {
-  const days = rangeDays(range);
-  const start = Date.parse('2026-04-01T00:00:00.000Z');
-  const seniorPoints: PortfolioEarningsHistoryPointDto[] = [];
-  const juniorPoints: PortfolioEarningsHistoryPointDto[] = [];
+function cashflowSince(range: EarningsRange): Date {
+  return new Date(Date.now() - rangeDays(range) * 24 * 60 * 60 * 1000);
+}
 
-  for (let index = 0; index < days; index += 1) {
-    const date = new Date(start + index * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    seniorPoints.push({ date, value: (100000000000000000n + BigInt(index) * 9000000000000000n).toString() });
-    juniorPoints.push({ date, value: (140000000000000000n + BigInt(index) * 13000000000000000n).toString() });
+function cashflowDate(cashflow: PortfolioCashflowDto): string {
+  return cashflow.blockTimestamp.toISOString().slice(0, 10);
+}
+
+function cashflowHistorySource(cashflows: PortfolioCashflowDto[], costBasisRows: PortfolioCostBasisDto[]): PortfolioDataSource {
+  if (cashflows.length === 0) {
+    return 'unavailable';
+  }
+
+  return costBasisRows.some((row) => row.dataQuality !== 'full') ? 'partial_indexed_events' : 'indexed_events';
+}
+
+function toEarningsHistory(
+  range: EarningsRange,
+  granularity: EarningsGranularity,
+  cashflows: PortfolioCashflowDto[],
+  costBasisRows: PortfolioCostBasisDto[],
+): PortfolioEarningsHistoryDto {
+  const source = cashflowHistorySource(cashflows, costBasisRows);
+
+  if (source === 'unavailable') {
+    return { range, granularity, series: [] };
+  }
+
+  const byTranche = new Map<'senior' | 'junior', Map<string, bigint>>();
+
+  for (const cashflow of cashflows) {
+    const tranche = cashflow.tranche === 'junior' ? 'junior' : 'senior';
+    const points = byTranche.get(tranche) ?? new Map<string, bigint>();
+    const date = cashflowDate(cashflow);
+    points.set(date, (points.get(date) ?? 0n) + BigInt(cashflow.valueDelta));
+    byTranche.set(tranche, points);
   }
 
   return {
     range,
     granularity,
-    series: [
-      { id: 'senior', label: 'Senior Token', points: seniorPoints, source: 'mock' },
-      { id: 'junior', label: 'Junior Token', points: juniorPoints, source: 'mock' },
-    ],
+    series: Array.from(byTranche.entries()).map(([tranche, points]) => ({
+      id: tranche,
+      label: tranche === 'senior' ? 'Senior Token' : 'Junior Token',
+      points: Array.from(points.entries())
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([date, value]) => ({ date, value: value.toString() })),
+      source,
+    })),
   };
 }
 
@@ -636,6 +631,7 @@ function dataQuality(
   earningsSource: PortfolioDataSource = mockEnabled ? 'mock' : 'unavailable',
   earningsHistorySource: PortfolioDataSource = mockEnabled ? 'mock' : 'unavailable',
   claimableItemsSource: PortfolioDataSource = mockEnabled ? 'mock' : 'unavailable',
+  historyAvailable = mockEnabled,
 ): PortfolioDataQualityDto {
   const mockedSections = mockEnabled
     ? [
@@ -657,7 +653,7 @@ function dataQuality(
 
   return {
     earningsEstimated: mockEnabled,
-    historyAvailable: mockEnabled,
+    historyAvailable,
     activityIndexedUntilBlock: null,
     mockEnabled,
     mockedSections,
@@ -832,31 +828,22 @@ export class PortfolioService {
 
   async getEarnings(address: string, options?: PortfolioEarningsOptions): Promise<PortfolioEarningsResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = portfolioMockEnabled(options);
-    const liveMarket = await this.contractReader.getMarketState();
     const range = options?.range ?? '30d';
     const granularity = options?.granularity ?? 'day';
-
-    if (includeMock) {
-      return {
-        walletAddress: normalizedAddress,
-        earnings: mockEarnings(liveMarket.address),
-        history: mockEarningsHistory(range, granularity),
-        dataQuality: dataQuality(includeMock),
-      };
-    }
-
-    const [livePositions, costBasisRows] = await Promise.all([
+    const [livePositions, costBasisRows, cashflowRows] = await Promise.all([
       this.contractReader.getPortfolioPositions(normalizedAddress),
       this.earningsRepository.findCostBasis(normalizedAddress),
+      this.earningsRepository.findCashflowsSince(normalizedAddress, cashflowSince(range)),
     ]);
     const earningsSource = earningsSourceForRows(costBasisRows);
+    const history = toEarningsHistory(range, granularity, cashflowRows, costBasisRows);
+    const historySource = cashflowHistorySource(cashflowRows, costBasisRows);
 
     return {
       walletAddress: normalizedAddress,
       earnings: costBasisRows.map((row) => toPortfolioEarningDto(row, livePositions)),
-      history: { range, granularity, series: [] },
-      dataQuality: dataQuality(false, 'unavailable', earningsSource, 'unavailable'),
+      history,
+      dataQuality: dataQuality(false, 'unavailable', earningsSource, historySource, 'unavailable', historySource !== 'unavailable'),
     };
   }
 

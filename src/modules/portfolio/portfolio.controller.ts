@@ -58,13 +58,13 @@ export class PortfolioController {
   @ApiOperation({
     summary: 'Get portfolio earnings section',
     description:
-      'Returns lazy-loaded earnings table and chart data. Historical earnings are mock-only until portfolio history/cost-basis calculations are implemented. Use includeMock=true for FE integration data.',
+      'Returns lazy-loaded earnings table and history data from portfolio cost-basis and cashflow projections only. includeMock is ignored for earnings/history production readiness.',
   })
   @ApiParam({ name: 'address', description: 'Wallet address.', example: '0xabcdef0000000000000000000000000000000001' })
   @ApiQuery({ name: 'includeMock', required: false, example: 'true' })
   @ApiQuery({ name: 'range', required: false, enum: ['7d', '30d', '90d'], example: '30d' })
   @ApiQuery({ name: 'granularity', required: false, enum: ['day'], example: 'day' })
-  @ApiOkResponse({ description: 'Portfolio earnings table and chart payload for lazy FE loading.', type: PortfolioEarningsResponseDto })
+  @ApiOkResponse({ description: 'Portfolio earnings table and history payload for lazy FE loading.', type: PortfolioEarningsResponseDto })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error.', type: ErrorResponseDto })
   getEarnings(
     @Param('address') address: string,
