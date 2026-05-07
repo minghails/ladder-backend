@@ -31,7 +31,12 @@ export class MarketApyService {
     }
 
     const first = ordered[0];
-    const latest = ordered[ordered.length - 1];
+    const latest = ordered.at(-1);
+
+    if (!first || !latest) {
+      return unavailableApy();
+    }
+
     const daysElapsed = BigInt(Math.floor((latest.snapshotAt.getTime() - first.snapshotAt.getTime()) / 1000)) / SECONDS_PER_DAY;
 
     if (daysElapsed <= 0n) {

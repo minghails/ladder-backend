@@ -553,12 +553,21 @@ function indexedYieldChart(
   }
 
   const first = valid[0];
+
+  if (!first) {
+    return unavailableChart(market, 'yield', range, chartConfig);
+  }
+
   const series = valid.map((snapshot) => ({
     timestamp: snapshot.snapshotAt.toISOString(),
     value: yieldApyValue(first, snapshot),
     source: 'indexed_snapshots' as const,
   }));
-  const latest = series[series.length - 1];
+  const latest = series.at(-1);
+
+  if (!latest) {
+    return unavailableChart(market, 'yield', range, chartConfig);
+  }
 
   return {
     market,

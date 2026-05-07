@@ -504,7 +504,7 @@ describe('PortfolioService', () => {
     }
   });
 
-  it('uses mock opt-in for full initial UI previews without generating heavy chart data', async () => {
+  it('does not use mock values or rows in portfolio overview even when sandbox mock fallback is enabled', async () => {
     await withPortfolioMockFallback(async () => {
       const { service } = await createService({ fakeDb: { depositRequestRows: [] } });
 
@@ -512,15 +512,21 @@ describe('PortfolioService', () => {
         includeMock: true,
       });
 
-      expect(portfolio.summary.currentEarning).not.toBe('0');
-      expect(portfolio.summary.totalValueChange.source).toBe('mock');
-      expect(portfolio.claimableItems).toHaveLength(3);
-      expect(portfolio.pendingRequests).toHaveLength(3);
-      expect(portfolio.recentActivities).toHaveLength(5);
-      expect(portfolio).not.toHaveProperty('earningsHistory');
-      expect(portfolio.dataQuality.mockEnabled).toBe(true);
-      expect(portfolio.dataQuality.mockedSections).toContain('recentActivities');
-      expect(portfolio.links.activities).toContain('includeMock=true');
+      expect(portfolio.summary.totalValueChange).toEqual({
+        amount: '0',
+        percent: '0',
+        source: 'unavailable',
+      });
+      expect(portfolio.summary.currentEarningSource).toBe('unavailable');
+      expect(portfolio.summary.earning30dSource).toBe('unavailable');
+      expect(portfolio.summary.claimable.source).toBe('unavailable');
+      expect(portfolio.portfolioMetrics.netApySource).toBe('unavailable');
+      expect(portfolio.claimableItems).toEqual([]);
+      expect(portfolio.pendingRequests).toEqual([]);
+      expect(portfolio.recentActivities).toEqual([]);
+      expect(portfolio.dataQuality.mockEnabled).toBe(false);
+      expect(portfolio.dataQuality.mockedSections).toEqual([]);
+      expect(portfolio.links.activities).not.toContain('includeMock=true');
     });
   });
 
