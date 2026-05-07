@@ -69,6 +69,12 @@ export class QuotesService {
     const live = await this.getLiveMarket(request.market);
     const warnings = statusWarnings(live);
     const amountYt = BigInt(request.amountYt);
+    const token = trancheToken(live, request.tranche);
+    const sharesOut = await this.quoteSimulation.previewDeposit({
+      trancheToken: token,
+      tranche: request.tranche,
+      amountYt: request.amountYt,
+    });
     const depositValue = (amountYt * BigInt(live.latestYtPrice)) / 10n ** 18n;
     const navStAfter = BigInt(live.navSt) + (request.tranche === 'senior' ? depositValue : 0n);
     const navJtAfter = BigInt(live.navJt) + (request.tranche === 'junior' ? depositValue : 0n);
@@ -102,13 +108,13 @@ export class QuotesService {
         token: live.ytTokenAddress,
       },
       estimate: {
-        sharesOut: request.amountYt,
+        sharesOut,
         depositValue: depositValue.toString(),
         navAfter: navAfter.toString(),
         navStAfter: navStAfter.toString(),
         navJtAfter: navJtAfter.toString(),
         stJtRatioAfter,
-        estimateType: 'derived',
+        estimateType: 'live_contract_preview',
       },
       availability: {
         available: unavailableReason === null,
@@ -133,7 +139,8 @@ export class QuotesService {
       dataQuality: {
         sources: {
           marketState: 'live_contract',
-          estimate: 'derived',
+          sharesOut: 'live_contract_preview',
+          estimate: 'live_contract_preview',
           constraints: 'derived',
         },
       },

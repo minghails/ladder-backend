@@ -74,6 +74,12 @@ export type SimulateDepositBaseInstantResult =
   | { ok: true; ytOut: string; sharesOut: string }
   | { ok: false; reason: string; errorName: string | null };
 
+export interface PreviewDepositInput {
+  trancheToken: string;
+  tranche: 'senior' | 'junior';
+  amountYt: string;
+}
+
 const SCALE = 10n ** 18n;
 
 function toStringValue(value: bigint | number | string | boolean): string {
@@ -233,6 +239,18 @@ export class ContractReaderService {
       stSharePrice: toStringValue(stSharePrice),
       jtSharePrice: toStringValue(jtSharePrice),
     };
+  }
+
+  async previewDeposit(input: PreviewDepositInput): Promise<string> {
+    const client = this.viem.getPublicClient();
+    const shares = await client.readContract({
+      address: input.trancheToken as Address,
+      abi: input.tranche === 'senior' ? ST_TRANCHE_ABI : JT_TRANCHE_ABI,
+      functionName: 'previewDeposit',
+      args: [BigInt(input.amountYt)],
+    });
+
+    return shares.toString();
   }
 
   async simulateDepositBaseInstant(input: SimulateDepositBaseInstantInput): Promise<SimulateDepositBaseInstantResult> {

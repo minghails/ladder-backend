@@ -8,8 +8,8 @@
 
 - Status: implementation in progress
 - Active epic: `epics/2026-05-07-quote-production-accuracy.md`
-- Active slice: Slice 2 — deposit YT quote previews
-- Latest session log: `sessions/2026-05-07-quote-simulation-service-extraction.md`
+- Active slice: Slice 3 — withdraw YT quote previews
+- Latest session log: `sessions/2026-05-07-deposit-yt-quote-previews.md`
 
 ## Execution rules
 
@@ -53,8 +53,8 @@
 | Slice | Status | Notes |
 |---|---|---|
 | Slice 1 — quote simulation service extraction | completed | Base instant simulation moved behind `QuoteSimulationService`; quote response behavior preserved. |
-| Slice 2 — deposit YT quote previews | active | use `previewDeposit` |
-| Slice 3 — withdraw YT quote previews | pending | use `previewRedeem` / `previewWithdraw` |
+| Slice 2 — deposit YT quote previews | completed | `sharesOut` now uses tranche `previewDeposit(amountYt)` with live preview source labels. |
+| Slice 3 — withdraw YT quote previews | active | use `previewRedeem` / `previewWithdraw` |
 
 ### Epic 4: Portfolio read models without mocks
 
@@ -86,3 +86,4 @@
 | 2026-05-07 | Epic 2 Slice 4 — production chart source behavior | completed | API data-source/behavior change | `yield` charts now use indexed APY snapshots when at least two valid points exist and remain unavailable otherwise; `utilization` remains unavailable; canonical API docs updated. Architecture docs checked; no update needed. |
 | 2026-05-07 | Epic 2 API impact summary | completed | API contract change | Market endpoints now expose live token metadata source labels, tranche `apySource`, production factsheet row sources, and indexed/unavailable chart sources. FE follow-ups: update market/factsheet/chart fixtures and read source labels for APY/yield availability. |
 | 2026-05-07 | Epic 3 Slice 1 — quote simulation service extraction | completed | No FE-facing API impact | Extracted base instant simulation delegation into `QuoteSimulationService`; existing deposit-base quote response shape, action hints, and source labels preserved. Architecture docs checked; no update needed. |
+| 2026-05-07 | Epic 3 Slice 2 — deposit YT quote previews | completed | API data-source/behavior change | `POST /quotes/deposit-yt` now uses selected tranche `previewDeposit(amountYt)` for `estimate.sharesOut`; NAV/risk constraints remain derived and no sender/calldata is required. Canonical API docs updated. Architecture docs checked; no update needed. |

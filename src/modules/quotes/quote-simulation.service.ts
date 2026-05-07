@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   ContractReaderService,
+  type PreviewDepositInput,
   type SimulateDepositBaseInstantInput,
   type SimulateDepositBaseInstantResult,
 } from '@shared/blockchain/contract-reader.service';
@@ -11,5 +12,9 @@ export class QuoteSimulationService {
 
   simulateDepositBaseInstant(input: SimulateDepositBaseInstantInput): Promise<SimulateDepositBaseInstantResult> {
     return this.contractReader.simulateDepositBaseInstant(input);
+  }
+
+  previewDeposit(input: PreviewDepositInput): Promise<string> {
+    return this.contractReader.previewDeposit(input);
   }
 }

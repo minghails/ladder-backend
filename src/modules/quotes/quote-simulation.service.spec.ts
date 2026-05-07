@@ -10,6 +10,7 @@ describe('QuoteSimulationService', () => {
         ytOut: '998000000000000000',
         sharesOut: '998000000000000000',
       }),
+      previewDeposit: vi.fn().mockResolvedValue('950000000000000000'),
     };
 
     return {
@@ -40,6 +41,20 @@ describe('QuoteSimulationService', () => {
       ytOut: '998000000000000000',
       sharesOut: '998000000000000000',
     });
+  });
+
+  it('delegates deposit preview to contract reader', async () => {
+    const { service, contractReader } = createService();
+    const input = {
+      trancheToken: '0x0000000000000000000000000000000000000005',
+      tranche: 'junior' as const,
+      amountYt: '1000000000000000000',
+    };
+
+    const result = await service.previewDeposit(input);
+
+    expect(contractReader.previewDeposit).toHaveBeenCalledWith(input);
+    expect(result).toBe('950000000000000000');
   });
 
   it('preserves mapped simulation reverts', async () => {

@@ -70,6 +70,28 @@ describe('ContractReaderService', () => {
     );
   });
 
+  it('previews deposit shares from selected tranche contract', async () => {
+    const readContract = vi.fn().mockResolvedValue(950000000000000000n);
+    const service = new ContractReaderService({
+      getPublicClient: () => ({ readContract }),
+    } as never);
+
+    const result = await service.previewDeposit({
+      trancheToken: '0x0000000000000000000000000000000000000005',
+      tranche: 'junior',
+      amountYt: '1000000000000000000',
+    });
+
+    expect(result).toBe('950000000000000000');
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: '0x0000000000000000000000000000000000000005',
+        functionName: 'previewDeposit',
+        args: [1000000000000000000n],
+      }),
+    );
+  });
+
   it('maps undecoded ERC20 insufficient allowance selector from viem raw revert', async () => {
     const error = {
       shortMessage: 'The contract function "depositInstant" reverted with the following signature:\n0xfb8f41b2',

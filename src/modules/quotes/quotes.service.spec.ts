@@ -48,6 +48,7 @@ describe('QuotesService', () => {
         ytOut: '998000000000000000',
         sharesOut: '998000000000000000',
       }),
+      previewDeposit: vi.fn().mockResolvedValue('950000000000000000'),
     };
 
     const module = await Test.createTestingModule({
@@ -71,8 +72,8 @@ describe('QuotesService', () => {
     };
   }
 
-  it('quotes junior deposit-yt as available with derived estimate and wagmi action hints', async () => {
-    const { service } = await createService();
+  it('quotes junior deposit-yt with tranche preview shares and wagmi action hints', async () => {
+    const { service, quoteSimulation } = await createService();
 
     const quote = await service.quoteDepositYt({
       market: LIVE_MARKET.address,
@@ -80,6 +81,11 @@ describe('QuotesService', () => {
       amountYt: '1000000000000000000',
     });
 
+    expect(quoteSimulation.previewDeposit).toHaveBeenCalledWith({
+      trancheToken: LIVE_MARKET.juniorTrancheAddress,
+      tranche: 'junior',
+      amountYt: '1000000000000000000',
+    });
     expect(quote).toMatchObject({
       input: {
         market: LIVE_MARKET.address,
@@ -88,13 +94,13 @@ describe('QuotesService', () => {
         token: LIVE_MARKET.ytTokenAddress,
       },
       estimate: {
-        sharesOut: '1000000000000000000',
+        sharesOut: '950000000000000000',
         depositValue: '1000000000000000000',
         navAfter: '40000001000000000000000000',
         navStAfter: LIVE_MARKET.navSt,
         navJtAfter: '10000001000000000000000000',
         stJtRatioAfter: '2999999700000029999',
-        estimateType: 'derived',
+        estimateType: 'live_contract_preview',
       },
       availability: {
         available: true,
@@ -119,7 +125,8 @@ describe('QuotesService', () => {
       dataQuality: {
         sources: {
           marketState: 'live_contract',
-          estimate: 'derived',
+          sharesOut: 'live_contract_preview',
+          estimate: 'live_contract_preview',
           constraints: 'derived',
         },
       },
