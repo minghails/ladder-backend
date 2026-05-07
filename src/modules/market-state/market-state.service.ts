@@ -12,12 +12,12 @@ import {
   unixSecondsToIso,
 } from './market-calculations';
 import { MarketApyService, type MarketApyResult } from './market-apy.service';
+import { MarketFactsheetService } from './market-factsheet.service';
 import {
   BASE_SEPOLIA_MARKET_NETWORK,
   MARKET_CHART_CONFIG,
   type MarketChartMetric,
   type MarketChartRange,
-  MARKET_FACTSHEET_ROWS,
   MARKET_SETTLEMENT_LABELS,
 } from './market-metadata.config';
 
@@ -224,6 +224,7 @@ export class MarketStateService {
   constructor(
     private readonly contractReader: ContractReaderService,
     private readonly apyService: MarketApyService,
+    private readonly factsheetService: MarketFactsheetService,
     @Optional()
     @Inject(DRIZZLE_DB)
     private readonly db?: MarketStateDatabase,
@@ -345,15 +346,15 @@ export class MarketStateService {
 
   async getFactsheet(address: string) {
     const live = await this.getLiveMarket(address);
-    const marketSymbol = stripTranchePrefix(live.seniorSymbol);
+    const baseTokenMetadata = await this.contractReader.getTokenMetadata(live.baseTokenAddress);
+    const factsheet = this.factsheetService.build(live, baseTokenMetadata);
 
     return {
       market: live.address,
-      title: `${marketSymbol} Market Factsheet`,
-      rows: MARKET_FACTSHEET_ROWS,
+      ...factsheet,
       dataQuality: {
         sources: {
-          factsheet: 'config',
+          factsheet: factsheet.sources,
         },
       },
     };
@@ -362,9 +363,14 @@ export class MarketStateService {
   async getChart(address: string, metric: MarketChartMetric, range: MarketChartRange = '30d') {
     const live = await this.getLiveMarket(address);
     const chartConfig = MARKET_CHART_CONFIG[metric];
+    const snapshots = await this.readSnapshotRows(live.address);
+    const chronological = [...snapshots].reverse();
+
+    if (metric === 'yield') {
+      return indexedYieldChart(live.address, range, chartConfig, chronological);
+    }
+
     if (isIndexedMetric(metric)) {
-      const snapshots = await this.readSnapshotRows(live.address);
-      const chronological = [...snapshots].reverse();
       const latest = snapshots[0];
 
       return {
@@ -533,4 +539,92 @@ function chartValue(
     return snapshot.ytPrice;
   }
   return snapshot.jtStRatio;
+}
+
+function indexedYieldChart(
+  market: string,
+  range: MarketChartRange,
+  chartConfig: (typeof MARKET_CHART_CONFIG)['yield'],
+  snapshots: Array<typeof marketSnapshots.$inferSelect>,
+) {
+  const valid = snapshots.filter(isValidApySnapshot);
+  if (valid.length < 2) {
+    return unavailableChart(market, 'yield', range, chartConfig);
+  }
+
+  const first = valid[0];
+  const series = valid.map((snapshot) => ({
+    timestamp: snapshot.snapshotAt.toISOString(),
+    value: yieldApyValue(first, snapshot),
+    source: 'indexed_snapshots' as const,
+  }));
+  const latest = series[series.length - 1];
+
+  return {
+    market,
+    metric: 'yield' as const,
+    range,
+    headline: {
+      label: chartConfig.label,
+      value: latest.value,
+      unit: chartConfig.unit,
+      source: 'indexed_snapshots' as const,
+    },
+    series,
+    dataQuality: {
+      sources: {
+        series: 'indexed_snapshots' as const,
+      },
+    },
+  };
+}
+
+function unavailableChart(
+  market: string,
+  metric: Exclude<MarketChartMetric, 'tvl' | 'tokenPrice' | 'ratio'>,
+  range: MarketChartRange,
+  chartConfig: (typeof MARKET_CHART_CONFIG)[Exclude<MarketChartMetric, 'tvl' | 'tokenPrice' | 'ratio'>],
+) {
+  return {
+    market,
+    metric,
+    range,
+    headline: {
+      label: chartConfig.label,
+      value: '0',
+      unit: chartConfig.unit,
+      source: 'unavailable' as const,
+    },
+    series: [],
+    dataQuality: {
+      sources: {
+        series: 'unavailable' as const,
+      },
+    },
+  };
+}
+
+function isValidApySnapshot(snapshot: typeof marketSnapshots.$inferSelect): boolean {
+  return BigInt(snapshot.stSharePrice) > 0n && BigInt(snapshot.jtSharePrice) > 0n;
+}
+
+function yieldApyValue(first: typeof marketSnapshots.$inferSelect, latest: typeof marketSnapshots.$inferSelect): string {
+  const daysElapsed = BigInt(Math.floor((latest.snapshotAt.getTime() - first.snapshotAt.getTime()) / 1000)) / 86400n;
+  if (daysElapsed <= 0n) {
+    return '0';
+  }
+  return formatChartScaledDecimal(((BigInt(latest.jtSharePrice) - BigInt(first.jtSharePrice)) * 365n * 10n ** 18n) / (BigInt(first.jtSharePrice) * daysElapsed));
+}
+
+function formatChartScaledDecimal(value: bigint): string {
+  const negative = value < 0n;
+  const absolute = negative ? -value : value;
+  const integer = absolute / 10n ** 18n;
+  const fraction = absolute % 10n ** 18n;
+
+  if (fraction === 0n) {
+    return `${negative ? '-' : ''}${integer.toString()}`;
+  }
+
+  return `${negative ? '-' : ''}${integer.toString()}.${fraction.toString().padStart(18, '0').replace(/0+$/, '')}`;
 }

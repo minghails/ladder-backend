@@ -5,6 +5,7 @@ import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { marketSnapshots } from '@shared/database/schema';
 import { MarketApyService } from './market-apy.service';
+import { MarketFactsheetService } from './market-factsheet.service';
 import { MARKET_CHART_CONFIG } from './market-metadata.config';
 import { MarketStateService } from './market-state.service';
 
@@ -88,6 +89,7 @@ describe('MarketStateService', () => {
       providers: [
         MarketStateService,
         MarketApyService,
+        MarketFactsheetService,
         {
           provide: ContractReaderService,
           useValue: contractReader,
@@ -239,6 +241,7 @@ describe('MarketStateService', () => {
       providers: [
         MarketStateService,
         MarketApyService,
+        MarketFactsheetService,
         {
           provide: ContractReaderService,
           useValue: contractReader,
@@ -369,7 +372,7 @@ describe('MarketStateService', () => {
     expect(constraints).not.toHaveProperty('buttonLabel');
   });
 
-  it('returns config-backed factsheet rows labelled by source', async () => {
+  it('returns production factsheet rows with explicit source labels', async () => {
     const { service } = await createService();
 
     const factsheet = await service.getFactsheet(LIVE_MARKET.address);
@@ -378,11 +381,20 @@ describe('MarketStateService', () => {
     expect(factsheet.title).toBe('mEDGE Market Factsheet');
     expect(factsheet.rows).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ label: 'Underlying', value: 'mEDGE', source: 'config' }),
+        expect.objectContaining({ label: 'Market Address', value: LIVE_MARKET.address, source: 'live_contract' }),
         expect.objectContaining({ label: 'Network', value: 'Base Sepolia', source: 'config' }),
+        expect.objectContaining({ label: 'Base Token', value: `USDC (${LIVE_MARKET.baseTokenAddress})`, source: 'config_address_live_metadata' }),
       ]),
     );
-    expect(factsheet.dataQuality.sources.factsheet).toBe('config');
+    expect(factsheet.rows.map((row) => row.source)).toContain('live_contract');
+    expect(factsheet.rows.map((row) => row.source)).toContain('config');
+    expect(factsheet.rows.map((row) => row.source)).toContain('config_address_live_metadata');
+    expect(factsheet.rows.map((row) => row.label)).not.toContain('Carry Fee');
+    expect(factsheet.dataQuality.sources.factsheet).toEqual({
+      live: 'live_contract',
+      config: 'config',
+      unavailable: 'unavailable',
+    });
   });
 
   it('keeps chart config metadata only without fixture data series', () => {
@@ -415,8 +427,80 @@ describe('MarketStateService', () => {
     });
   });
 
+  it('returns unavailable empty yield chart when APY snapshots are insufficient', async () => {
+    const { service } = await createService(LIVE_MARKET, [snapshotRow()]);
+
+    const chart = await service.getChart(LIVE_MARKET.address, 'yield', '30d');
+
+    expect(chart).toMatchObject({
+      headline: {
+        value: '0',
+        source: 'unavailable',
+      },
+      series: [],
+      dataQuality: {
+        sources: {
+          series: 'unavailable',
+        },
+      },
+    });
+  });
+
+  it('returns yield chart from indexed APY snapshots', async () => {
+    const { service } = await createService(LIVE_MARKET, [
+      snapshotRow({
+        id: 1,
+        blockNumber: '100',
+        sourceLogIndex: '1',
+        stSharePrice: '1000000000000000000',
+        jtSharePrice: '1000000000000000000',
+        snapshotAt: new Date('2026-04-01T00:00:00.000Z'),
+      }),
+      snapshotRow({
+        id: 2,
+        blockNumber: '101',
+        sourceLogIndex: '1',
+        stSharePrice: '1010000000000000000',
+        jtSharePrice: '1030000000000000000',
+        snapshotAt: new Date('2026-05-01T00:00:00.000Z'),
+      }),
+    ]);
+
+    const chart = await service.getChart(LIVE_MARKET.address, 'yield', '30d');
+
+    expect(chart).toMatchObject({
+      metric: 'yield',
+      headline: {
+        label: 'Yield APY',
+        value: '0.365',
+        unit: '%',
+        source: 'indexed_snapshots',
+      },
+      series: [
+        {
+          timestamp: '2026-04-01T00:00:00.000Z',
+          value: '0',
+          source: 'indexed_snapshots',
+        },
+        {
+          timestamp: '2026-05-01T00:00:00.000Z',
+          value: '0.365',
+          source: 'indexed_snapshots',
+        },
+      ],
+      dataQuality: {
+        sources: {
+          series: 'indexed_snapshots',
+        },
+      },
+    });
+  });
+
   it('returns unavailable empty utilization chart instead of mock fixtures', async () => {
-    const { service } = await createService(LIVE_MARKET, []);
+    const { service } = await createService(LIVE_MARKET, [
+      snapshotRow(),
+      snapshotRow({ id: 2, blockNumber: '101' }),
+    ]);
 
     const chart = await service.getChart(LIVE_MARKET.address, 'utilization', '30d');
 

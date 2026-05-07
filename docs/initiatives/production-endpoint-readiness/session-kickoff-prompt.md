@@ -8,9 +8,9 @@ Read `backend/docs/HANDOFF.md` first and follow it exactly.
 Active initiative: `backend/docs/initiatives/production-endpoint-readiness/`
 Active tracker: `backend/docs/initiatives/production-endpoint-readiness/tracker.md`
 Active plan: `backend/docs/plans/2026-05-07-production-endpoint-readiness.md`
-Active epic: `backend/docs/initiatives/production-endpoint-readiness/epics/2026-05-07-market-metadata-apy-charts.md`
-Active slice: Slice 3 — production factsheet service.
-Latest session log: `backend/docs/initiatives/production-endpoint-readiness/sessions/2026-05-07-apy-snapshots-service.md`
+Active epic: `backend/docs/initiatives/production-endpoint-readiness/epics/2026-05-07-quote-production-accuracy.md`
+Active slice: Slice 1 — quote simulation service extraction.
+Latest session log: `backend/docs/initiatives/production-endpoint-readiness/sessions/2026-05-07-production-chart-source-behavior.md`
 
 Do not scan unrelated backend plans, initiatives, sessions, or raw docs. Read only:
 1. `AGENTS.md`
@@ -18,27 +18,29 @@ Do not scan unrelated backend plans, initiatives, sessions, or raw docs. Read on
 3. `backend/docs/HANDOFF.md`
 4. `backend/docs/plans/2026-05-07-production-endpoint-readiness.md`
 5. `backend/docs/initiatives/production-endpoint-readiness/tracker.md`
-6. `backend/docs/initiatives/production-endpoint-readiness/epics/2026-05-07-market-metadata-apy-charts.md`
+6. `backend/docs/initiatives/production-endpoint-readiness/epics/2026-05-07-quote-production-accuracy.md`
 7. latest session log named above
-8. source files needed for Slice 3 only.
+8. source files needed for the active quote slice only.
 
-Work one bounded slice only: production factsheet service.
+Work one bounded slice only: quote simulation service extraction.
 
-Slice 3 scope:
-- Split factsheet fields into live/config/unavailable.
-- Remove rows that cannot be sourced truthfully.
-- Ensure every row has a source.
+Slice scope:
+- Move base instant simulation logic out of `QuotesService` into `QuoteSimulationService`.
+- Add tranche preview helper seams required by later quote slices only if they fit the bounded extraction.
+- Preserve action hints and no-calldata behavior.
+- Preserve existing quote API behavior unless tests prove extraction requires source-label/doc changes.
 
 Likely files:
-- `backend/src/modules/market-state/market-factsheet.service.ts`
-- `backend/src/modules/market-state/market-state.service.ts`
-- `backend/src/modules/market-state/market-metadata.config.ts`
-- `backend/src/modules/market-state/market-factsheet.service.spec.ts`
-- `docs/canonical/api-contract.md` if row semantics change.
+- `backend/src/modules/quotes/quote-simulation.service.ts`
+- `backend/src/modules/quotes/quotes.service.ts`
+- `backend/src/modules/quotes/quote-simulation.service.spec.ts`
+- `backend/src/shared/blockchain/contract-reader.service.ts` only if helper seams are required.
+- `docs/canonical/api-contract.md` only if request/response source fields change.
 
 Required verification:
-- Targeted factsheet tests.
-- `pnpm test -- market-state`
+- Targeted quote simulation tests.
+- Relevant quote service/controller tests.
+- `pnpm test -- quotes`
 - `pnpm lint` if source changes.
 - Additional tests if touched areas require them.
 

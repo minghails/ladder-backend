@@ -10,13 +10,9 @@ export const MARKET_SETTLEMENT_LABELS = {
   withdrawYt: 'Direct YT withdrawal through tranche vault',
 } as const;
 
-export const MARKET_FACTSHEET_ROWS = [
-  { label: 'Underlying', value: 'mEDGE', source: 'config' },
-  { label: 'Base Asset', value: 'USDC', source: 'config' },
-  { label: 'Network', value: BASE_SEPOLIA_MARKET_NETWORK.name, source: 'config' },
+export const MARKET_FACTSHEET_CONFIG_ROWS = [
   { label: 'Senior Claim', value: 'Benchmark yield, first claim', source: 'config' },
   { label: 'Junior Claim', value: 'First-loss, leveraged upside', source: 'config' },
-  { label: 'Carry Fee', value: '20% of Junior leverage excess', source: 'config' },
 ] as const;
 
 export type MarketChartMetric = 'yield' | 'tokenPrice' | 'tvl' | 'utilization' | 'ratio';
