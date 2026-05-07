@@ -1,5 +1,17 @@
 import type { ProjectedEventName } from './projector.types';
 
+export const REQUIRED_PORTFOLIO_EVENT_NAMES = [
+  'DepositYT',
+  'WithdrawYT',
+  'DepositRequested',
+  'DepositBasePulled',
+  'DepositRequestLinked',
+  'DepositSettled',
+  'DepositRejected',
+  'DepositRefunded',
+  'TrancheDeposit',
+] as const;
+
 export const SUPPORTED_MARKET_EVENT_NAMES = [
   'DepositYT',
   'WithdrawYT',

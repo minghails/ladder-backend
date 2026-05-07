@@ -9,8 +9,8 @@ Active initiative: `backend/docs/initiatives/production-endpoint-readiness/`
 Active tracker: `backend/docs/initiatives/production-endpoint-readiness/tracker.md`
 Active plan: `backend/docs/plans/2026-05-07-production-endpoint-readiness.md`
 Active epic: `backend/docs/initiatives/production-endpoint-readiness/epics/2026-05-07-portfolio-read-models.md`
-Active slice: Slice 1 — validate projector event coverage.
-Latest session log: `backend/docs/initiatives/production-endpoint-readiness/sessions/2026-05-07-withdraw-yt-quote-previews.md`
+Active slice: Slice 2 — production portfolio overview.
+Latest session log: `backend/docs/initiatives/production-endpoint-readiness/sessions/2026-05-07-portfolio-event-coverage.md`
 
 Do not scan unrelated backend plans, initiatives, sessions, or raw docs. Read only:
 1. `AGENTS.md`
@@ -22,7 +22,13 @@ Do not scan unrelated backend plans, initiatives, sessions, or raw docs. Read on
 7. latest session log named above
 8. source files needed for active slice only.
 
-Work one bounded slice only: validate projector event coverage.
+Work one bounded slice only: production portfolio overview.
+
+Slice 2 scope:
+- Remove mock summary values from default/production overview.
+- Keep `summary.totalValue` from live tranche balances + price.
+- Return unavailable source for missing real earnings/APY values.
+- Return DB rows only for pending requests, recent activities, claimables.
 
 Before marking slice done:
 - Check `docs/canonical/backend-architecture.md` and backend architecture docs only for relevant changes.

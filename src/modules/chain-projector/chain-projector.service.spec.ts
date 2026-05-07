@@ -637,6 +637,47 @@ describe('ChainProjectorService', () => {
     });
   });
 
+  it('marks cost basis partial when withdrawal history starts without matching prior deposits', async () => {
+    const portfolioAccountingRepository = {
+      recordDepositCashflow: vi.fn().mockResolvedValue({ inserted: true }),
+      recordWithdrawalCashflow: vi.fn().mockResolvedValue({ inserted: true }),
+      findCostBasisByWallet: vi.fn().mockResolvedValue([]),
+      upsertCostBasis: vi.fn().mockResolvedValue(undefined),
+    };
+    const { service } = await createService({
+      logs: [withdrawYtLog()],
+      portfolioAccountingRepository,
+    });
+
+    await service.runOnce();
+
+    const upsertInput = portfolioAccountingRepository.upsertCostBasis.mock.calls[0]?.[0] as {
+      state: { dataQuality: string };
+    };
+    expect(upsertInput.state.dataQuality).toBe('partial');
+  });
+
+  it('does not re-apply cost basis when replayed cashflow is duplicate', async () => {
+    const portfolioAccountingRepository = {
+      recordDepositCashflow: vi
+        .fn()
+        .mockResolvedValueOnce({ inserted: true })
+        .mockResolvedValueOnce({ inserted: false }),
+      recordWithdrawalCashflow: vi.fn().mockResolvedValue({ inserted: true }),
+      findCostBasisByWallet: vi.fn().mockResolvedValue([]),
+      upsertCostBasis: vi.fn().mockResolvedValue(undefined),
+    };
+    const { service } = await createService({
+      logs: [depositSettledLog(), depositSettledLog()],
+      portfolioAccountingRepository,
+    });
+
+    await service.runOnce();
+
+    expect(portfolioAccountingRepository.recordDepositCashflow).toHaveBeenCalledTimes(2);
+    expect(portfolioAccountingRepository.upsertCostBasis).toHaveBeenCalledTimes(1);
+  });
+
   it('correlates DepositYT with same transaction tranche Deposit owner', async () => {
     const portfolioAccountingRepository = {
       recordDepositCashflow: vi.fn().mockResolvedValue({ inserted: true }),
