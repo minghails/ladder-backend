@@ -22,43 +22,31 @@ export const MARKET_FACTSHEET_ROWS = [
 export type MarketChartMetric = 'yield' | 'tokenPrice' | 'tvl' | 'utilization' | 'ratio';
 export type MarketChartRange = '30d';
 
-export const MARKET_CHART_FIXTURES: Record<
+export const MARKET_CHART_CONFIG: Record<
   MarketChartMetric,
   {
     label: string;
-    value: string;
     unit: string;
-    values: string[];
   }
 > = {
   yield: {
     label: 'Yield APY',
-    value: '8.40',
     unit: '%',
-    values: ['7.90', '8.05', '8.18', '8.22', '8.36', '8.40'],
   },
   tokenPrice: {
     label: 'Token Price',
-    value: '1.00',
     unit: 'USD',
-    values: ['0.998', '0.999', '1.000', '1.001', '1.000', '1.000'],
   },
   tvl: {
     label: 'TVL',
-    value: '40000000',
     unit: 'USD',
-    values: ['36000000', '37200000', '38100000', '38900000', '39500000', '40000000'],
   },
   utilization: {
     label: 'Utilization',
-    value: '72.00',
     unit: '%',
-    values: ['68.00', '69.50', '70.00', '71.00', '71.50', '72.00'],
   },
   ratio: {
     label: 'Senior/Junior Ratio',
-    value: '3.00',
     unit: 'x',
-    values: ['2.70', '2.80', '2.90', '3.00', '3.00', '3.00'],
   },
 };

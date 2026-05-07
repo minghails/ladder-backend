@@ -13,7 +13,7 @@ import {
 } from './market-calculations';
 import {
   BASE_SEPOLIA_MARKET_NETWORK,
-  MARKET_CHART_FIXTURES,
+  MARKET_CHART_CONFIG,
   type MarketChartMetric,
   type MarketChartRange,
   MARKET_FACTSHEET_ROWS,
@@ -155,9 +155,10 @@ function statusWarnings(live: LiveMarketState): string[] {
   return [...(live.halted ? ['MARKET_HALTED'] : []), ...(isPriceStale(live.lastUpdatedTime) ? ['STALE_PRICE'] : [])];
 }
 
-function toMarketDetail(live: LiveMarketState): MarketDetailDto {
+async function toMarketDetail(live: LiveMarketState, contractReader: ContractReaderService): Promise<MarketDetailDto> {
   const marketSymbol = stripTranchePrefix(live.seniorSymbol);
   const stalePrice = isPriceStale(live.lastUpdatedTime);
+  const baseTokenMetadata = await contractReader.getTokenMetadata(live.baseTokenAddress);
 
   return {
     address: live.address,
@@ -190,9 +191,9 @@ function toMarketDetail(live: LiveMarketState): MarketDetailDto {
       symbol: marketSymbol,
       address: live.ytTokenAddress,
       baseToken: {
-        symbol: 'USDC',
+        symbol: baseTokenMetadata.symbol,
         address: live.baseTokenAddress,
-        decimals: 6,
+        decimals: baseTokenMetadata.decimals,
       },
     },
     nav: {
@@ -224,7 +225,7 @@ export class MarketStateService {
   ) {}
 
   async listMarkets(): Promise<MarketListResponseDto> {
-    const market = toMarketDetail(await this.contractReader.getMarketState());
+    const market = await toMarketDetail(await this.contractReader.getMarketState(), this.contractReader);
 
     return {
       markets: [toListItem(market)],
@@ -232,7 +233,7 @@ export class MarketStateService {
   }
 
   async getMarket(address: string): Promise<MarketDetailDto> {
-    return toMarketDetail(await this.getLiveMarket(address));
+    return toMarketDetail(await this.getLiveMarket(address), this.contractReader);
   }
 
   async getDepositLimits(address: string) {
@@ -280,12 +281,13 @@ export class MarketStateService {
     const live = await this.getLiveMarket(address);
     const seniorDepositCapacity = calculateSeniorDepositCapacity(live.navSt, live.navJt, live.maxStJtRatio);
     const juniorWithdrawalCapacity = calculateJuniorWithdrawalCapacity(live.navSt, live.navJt, live.maxStJtRatio);
+    const baseTokenMetadata = await this.contractReader.getTokenMetadata(live.baseTokenAddress);
 
     return {
       market: live.address,
       tokens: {
         yt: { symbol: stripTranchePrefix(live.seniorSymbol), address: live.ytTokenAddress, decimals: 18 },
-        base: { symbol: 'USDC', address: live.baseTokenAddress, decimals: 6 },
+        base: { symbol: baseTokenMetadata.symbol, address: live.baseTokenAddress, decimals: baseTokenMetadata.decimals },
         senior: { symbol: live.seniorSymbol, address: live.seniorTrancheAddress, decimals: 18 },
         junior: { symbol: live.juniorSymbol, address: live.juniorTrancheAddress, decimals: 18 },
       },
@@ -323,7 +325,7 @@ export class MarketStateService {
       warnings: statusWarnings(live),
       dataQuality: {
         sources: {
-          tokens: 'live_contract',
+          tokens: 'config_address_live_metadata',
           approvals: 'derived',
           methods: 'contract_abi',
           capabilities: 'live_contract',
@@ -352,7 +354,7 @@ export class MarketStateService {
 
   async getChart(address: string, metric: MarketChartMetric, range: MarketChartRange = '30d') {
     const live = await this.getLiveMarket(address);
-    const fixture = MARKET_CHART_FIXTURES[metric];
+    const chartConfig = MARKET_CHART_CONFIG[metric];
     if (isIndexedMetric(metric)) {
       const snapshots = await this.readSnapshotRows(live.address);
       const chronological = [...snapshots].reverse();
@@ -363,9 +365,9 @@ export class MarketStateService {
         metric,
         range,
         headline: {
-          label: fixture.label,
+          label: chartConfig.label,
           value: latest === undefined ? '0' : chartValue(latest, metric),
-          unit: fixture.unit,
+          unit: chartConfig.unit,
           source: 'indexed_events',
         },
         series: chronological.map((snapshot) => ({
@@ -385,9 +387,9 @@ export class MarketStateService {
       metric,
       range,
       headline: {
-        label: fixture.label,
+        label: chartConfig.label,
         value: '0',
-        unit: fixture.unit,
+        unit: chartConfig.unit,
         source: 'unavailable',
       },
       series: [],

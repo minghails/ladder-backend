@@ -15,6 +15,35 @@ const INPUT = {
 };
 
 describe('ContractReaderService', () => {
+  it('reads ERC20 token symbol and decimals from live contract metadata', async () => {
+    const readContract = vi.fn()
+      .mockResolvedValueOnce('USDC')
+      .mockResolvedValueOnce(6);
+    const service = new ContractReaderService({
+      getPublicClient: () => ({ readContract }),
+    } as never);
+
+    const metadata = await service.getTokenMetadata('0x0000000000000000000000000000000000000002');
+
+    expect(metadata).toEqual({
+      address: '0x0000000000000000000000000000000000000002',
+      symbol: 'USDC',
+      decimals: 6,
+    });
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: '0x0000000000000000000000000000000000000002',
+        functionName: 'symbol',
+      }),
+    );
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: '0x0000000000000000000000000000000000000002',
+        functionName: 'decimals',
+      }),
+    );
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

@@ -30,6 +30,23 @@ export * from './market.abi';
 export * from './st-tranche.abi';
 export * from './jt-tranche.abi';
 
+export const ERC20_METADATA_ABI = [
+  {
+    inputs: [],
+    name: 'symbol',
+    outputs: [{ internalType: 'string', name: '', type: 'string' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'decimals',
+    outputs: [{ internalType: 'uint8', name: '', type: 'uint8' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
 export const BASE_SEPOLIA_CHAIN_ID = 84532 as const;
 
 export const BASE_SEPOLIA_ADDRESSES = {

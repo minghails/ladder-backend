@@ -2,12 +2,19 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Address } from 'viem';
 import { ViemClientService } from './viem-client.service';
 import {
+  ERC20_METADATA_ABI,
   MARKET_ABI,
   MIDAS_ADAPTOR_ABI,
   ST_TRANCHE_ABI,
   JT_TRANCHE_ABI,
   MOCK_USDC_ADDRESS,
 } from './contracts';
+
+export interface TokenMetadata {
+  address: string;
+  symbol: string;
+  decimals: number;
+}
 
 export interface LiveMarketCapabilities {
   depositBaseInstant: boolean;
@@ -118,6 +125,21 @@ export class ContractReaderService {
   private readonly logger = new Logger(ContractReaderService.name);
 
   constructor(private readonly viem: ViemClientService) {}
+
+  async getTokenMetadata(address: string): Promise<TokenMetadata> {
+    const client = this.viem.getPublicClient();
+    const tokenAddress = address as Address;
+    const [symbol, decimals] = await Promise.all([
+      client.readContract({ address: tokenAddress, abi: ERC20_METADATA_ABI, functionName: 'symbol' }),
+      client.readContract({ address: tokenAddress, abi: ERC20_METADATA_ABI, functionName: 'decimals' }),
+    ]);
+
+    return {
+      address,
+      symbol: toStringValue(symbol),
+      decimals,
+    };
+  }
 
   async getMarketState(): Promise<LiveMarketState> {
     const client = this.viem.getPublicClient();

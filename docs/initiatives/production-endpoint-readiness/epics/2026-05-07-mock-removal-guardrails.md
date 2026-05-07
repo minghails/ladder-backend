@@ -8,7 +8,11 @@ Ensure production/default API paths cannot return mock portfolio data or fixture
 
 `backend/docs/plans/2026-05-07-production-endpoint-readiness.md` Chunk 1.
 
-## Active slice
+## Status
+
+Completed.
+
+## Completed slices
 
 ### Slice 1 — production mock policy helper
 
@@ -39,8 +43,18 @@ Ensure production/default API paths cannot return mock portfolio data or fixture
 - Empty real data returns empty arrays or `unavailable`, not mock.
 - API impact reported per `backend/docs/HANDOFF.md`.
 
-## Future slices
-
 ### Slice 2 — remove production chart fixtures
 
-Covers Task 2 after Slice 1 completes.
+**Scope**
+
+- Keep chart label/unit config.
+- Remove fixture-style chart row values and series from production config.
+- Preserve indexed chart behavior for `tvl`, `tokenPrice`, and `ratio`.
+- Preserve unavailable empty chart behavior for `yield` and `utilization`.
+
+**Acceptance**
+
+- Chart config contains metadata only.
+- No production chart path can return fixture series.
+- `yield` and `utilization` return empty unavailable series.
+- API impact reported per `backend/docs/HANDOFF.md`.

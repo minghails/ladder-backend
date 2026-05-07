@@ -6,6 +6,7 @@ import { depositRequests } from '@shared/database/schema';
 import { PortfolioActivityRepository } from './portfolio-activity.repository';
 import { PortfolioClaimablesRepository } from './portfolio-claimables.repository';
 import { PortfolioEarningsRepository, type PortfolioCostBasisDto } from './portfolio-earnings.repository';
+import { portfolioMockEnabled } from './portfolio-production-mode';
 
 export type PortfolioDataSource = 'live' | 'db' | 'mock' | 'placeholder' | 'unavailable' | 'derived' | 'indexed_events' | 'partial_indexed_events';
 export type PortfolioRequestStatus = 'pending' | 'settled' | 'rejected' | 'refunded';
@@ -256,18 +257,6 @@ function isFixtureReadDatabase(db: PortfolioDatabase | undefined): db is Fixture
 
 function isPortfolioReadDatabase(db: PortfolioDatabase | undefined): db is PortfolioReadDatabase {
   return Boolean(db && 'select' in db && typeof db.select === 'function');
-}
-
-function envMockEnabled(): boolean {
-  return process.env['PORTFOLIO_MOCK_FALLBACK'] === 'true';
-}
-
-function shouldIncludeMock(options?: PortfolioQueryOptions): boolean {
-  return options?.includeMock === true || envMockEnabled();
-}
-
-function explicitMockRequested(options?: PortfolioQueryOptions): boolean {
-  return options?.includeMock === true;
 }
 
 function clampLimit(limit?: number): number {
@@ -774,7 +763,7 @@ export class PortfolioService {
 
   async getPortfolio(address: string, options?: PortfolioQueryOptions): Promise<PortfolioResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeSandboxMock = explicitMockRequested(options);
+    const includeSandboxMock = portfolioMockEnabled(options);
     const [livePositions, liveMarket, requestRows, costBasisRows] = await Promise.all([
       this.contractReader.getPortfolioPositions(normalizedAddress),
       this.contractReader.getMarketState(),
@@ -848,7 +837,7 @@ export class PortfolioService {
 
   async getRequests(address: string, options?: PortfolioListOptions): Promise<PortfolioRequestsResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = shouldIncludeMock(options);
+    const includeMock = portfolioMockEnabled(options);
     const [liveMarket, requestRows] = await Promise.all([
       this.contractReader.getMarketState(),
       this.readRequests(normalizedAddress),
@@ -868,7 +857,7 @@ export class PortfolioService {
 
   async getEarnings(address: string, options?: PortfolioEarningsOptions): Promise<PortfolioEarningsResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = explicitMockRequested(options);
+    const includeMock = portfolioMockEnabled(options);
     const liveMarket = await this.contractReader.getMarketState();
     const range = options?.range ?? '30d';
     const granularity = options?.granularity ?? 'day';
@@ -898,7 +887,7 @@ export class PortfolioService {
 
   async getClaimables(address: string, options?: PortfolioListOptions): Promise<PortfolioClaimablesResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = explicitMockRequested(options);
+    const includeMock = portfolioMockEnabled(options);
     const liveMarket = await this.contractReader.getMarketState();
     const marketSymbol = stripTranchePrefix(liveMarket.seniorSymbol);
     const liveClaimables = includeMock ? [] : await this.claimablesRepository.findByWallet(normalizedAddress, marketSymbol);
@@ -913,7 +902,7 @@ export class PortfolioService {
 
   async getActivities(address: string, options?: PortfolioListOptions): Promise<PortfolioActivitiesResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = shouldIncludeMock(options);
+    const includeMock = portfolioMockEnabled(options);
     const liveMarket = await this.contractReader.getMarketState();
     const marketSymbol = stripTranchePrefix(liveMarket.seniorSymbol);
     const indexedActivities = await this.activityRepository.findByWallet(normalizedAddress, marketSymbol);

@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { marketSnapshots } from '@shared/database/schema';
+import { MARKET_CHART_CONFIG } from './market-metadata.config';
 import { MarketStateService } from './market-state.service';
 
 const LIVE_MARKET: LiveMarketState = {
@@ -66,9 +67,11 @@ describe('MarketStateService', () => {
   async function createService(
     liveMarket: LiveMarketState = LIVE_MARKET,
     snapshots: Array<typeof marketSnapshots.$inferSelect> = [],
+    tokenMetadata = { address: liveMarket.baseTokenAddress, symbol: 'USDC', decimals: 6 },
   ) {
     const contractReader = {
       getMarketState: vi.fn().mockResolvedValue(liveMarket),
+      getTokenMetadata: vi.fn().mockResolvedValue(tokenMetadata),
     };
     const db = {
       query: {
@@ -160,6 +163,23 @@ describe('MarketStateService', () => {
         depositBaseRequest: true,
         withdrawBaseAsync: false,
       },
+    });
+  });
+
+  it('uses live ERC20 metadata for base token symbol and decimals', async () => {
+    const { service, contractReader } = await createService(LIVE_MARKET, [], {
+      address: LIVE_MARKET.baseTokenAddress,
+      symbol: 'USDBC',
+      decimals: 6,
+    });
+
+    const detail = await service.getMarket(LIVE_MARKET.address);
+
+    expect(contractReader.getTokenMetadata).toHaveBeenCalledWith(LIVE_MARKET.baseTokenAddress);
+    expect(detail.underlying.baseToken).toEqual({
+      symbol: 'USDBC',
+      address: LIVE_MARKET.baseTokenAddress,
+      decimals: 6,
     });
   });
 
@@ -295,7 +315,7 @@ describe('MarketStateService', () => {
       warnings: [],
       dataQuality: {
         sources: {
-          tokens: 'live_contract',
+          tokens: 'config_address_live_metadata',
           approvals: 'derived',
           methods: 'contract_abi',
           capabilities: 'live_contract',
@@ -322,6 +342,12 @@ describe('MarketStateService', () => {
       ]),
     );
     expect(factsheet.dataQuality.sources.factsheet).toBe('config');
+  });
+
+  it('keeps chart config metadata only without fixture data series', () => {
+    expect(MARKET_CHART_CONFIG.tvl).toEqual({ label: 'TVL', unit: 'USD' });
+    expect(MARKET_CHART_CONFIG.yield).not.toHaveProperty('values');
+    expect(MARKET_CHART_CONFIG.utilization).not.toHaveProperty('value');
   });
 
   it('returns unavailable empty yield chart instead of mock fixtures', async () => {
