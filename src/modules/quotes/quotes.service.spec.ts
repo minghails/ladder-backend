@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
+import { QuoteSimulationService } from './quote-simulation.service';
 import { QuotesService } from './quotes.service';
 
 const LIVE_MARKET: LiveMarketState = {
@@ -40,6 +41,8 @@ describe('QuotesService', () => {
   async function createService(liveMarket: LiveMarketState = LIVE_MARKET) {
     const contractReader = {
       getMarketState: vi.fn().mockResolvedValue(liveMarket),
+    };
+    const quoteSimulation = {
       simulateDepositBaseInstant: vi.fn().mockResolvedValue({
         ok: true,
         ytOut: '998000000000000000',
@@ -54,12 +57,17 @@ describe('QuotesService', () => {
           provide: ContractReaderService,
           useValue: contractReader,
         },
+        {
+          provide: QuoteSimulationService,
+          useValue: quoteSimulation,
+        },
       ],
     }).compile();
 
     return {
       service: module.get(QuotesService),
       contractReader,
+      quoteSimulation,
     };
   }
 
@@ -171,7 +179,7 @@ describe('QuotesService', () => {
   });
 
   it('uses onchain simulation for deposit-base quotes when sender is supplied', async () => {
-    const { service, contractReader } = await createService();
+    const { service, quoteSimulation } = await createService();
 
     const quote = await service.quoteDepositBase({
       market: LIVE_MARKET.address,
@@ -181,7 +189,7 @@ describe('QuotesService', () => {
       minYtOut: '900000000000000000',
     });
 
-    expect(contractReader.simulateDepositBaseInstant).toHaveBeenCalledWith({
+    expect(quoteSimulation.simulateDepositBaseInstant).toHaveBeenCalledWith({
       market: LIVE_MARKET.address,
       asSenior: false,
       tokenIn: LIVE_MARKET.baseTokenAddress,
@@ -201,7 +209,7 @@ describe('QuotesService', () => {
   });
 
   it('requires sender for exact deposit-base simulation', async () => {
-    const { service, contractReader } = await createService();
+    const { service, quoteSimulation } = await createService();
 
     const quote = await service.quoteDepositBase({
       market: LIVE_MARKET.address,
@@ -209,7 +217,7 @@ describe('QuotesService', () => {
       amount: '1000000',
     });
 
-    expect(contractReader.simulateDepositBaseInstant).not.toHaveBeenCalled();
+    expect(quoteSimulation.simulateDepositBaseInstant).not.toHaveBeenCalled();
     expect(quote.availability).toEqual({
       available: false,
       reason: 'SENDER_REQUIRED',
@@ -219,8 +227,8 @@ describe('QuotesService', () => {
   });
 
   it('marks deposit-base unavailable when onchain simulation reverts', async () => {
-    const { service, contractReader } = await createService();
-    contractReader.simulateDepositBaseInstant.mockResolvedValueOnce({
+    const { service, quoteSimulation } = await createService();
+    quoteSimulation.simulateDepositBaseInstant.mockResolvedValueOnce({
       ok: false,
       reason: 'INSUFFICIENT_ALLOWANCE_OR_BALANCE',
       errorName: null,

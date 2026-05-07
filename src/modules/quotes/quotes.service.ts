@@ -1,12 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   ContractReaderService,
   type LiveMarketState,
 } from '@shared/blockchain/contract-reader.service';
+import { QuoteSimulationService } from './quote-simulation.service';
 import {
   calculateJuniorWithdrawalCapacity,
   calculateSeniorDepositCapacity,
@@ -63,7 +60,10 @@ function isZeroAddress(address: string): boolean {
 
 @Injectable()
 export class QuotesService {
-  constructor(private readonly contractReader: ContractReaderService) {}
+  constructor(
+    private readonly contractReader: ContractReaderService,
+    private readonly quoteSimulation: QuoteSimulationService,
+  ) {}
 
   async quoteDepositYt(request: DepositYtQuoteRequest) {
     const live = await this.getLiveMarket(request.market);
@@ -167,7 +167,7 @@ export class QuotesService {
     const baseUnavailableReason = unavailableReason ?? (missingSender ? 'SENDER_REQUIRED' : null);
     const simulation = baseUnavailableReason
       ? null
-      : await this.contractReader.simulateDepositBaseInstant({
+      : await this.quoteSimulation.simulateDepositBaseInstant({
           market: live.address,
           asSenior: request.tranche === 'senior',
           tokenIn: live.baseTokenAddress,

@@ -9,8 +9,8 @@ Active initiative: `backend/docs/initiatives/production-endpoint-readiness/`
 Active tracker: `backend/docs/initiatives/production-endpoint-readiness/tracker.md`
 Active plan: `backend/docs/plans/2026-05-07-production-endpoint-readiness.md`
 Active epic: `backend/docs/initiatives/production-endpoint-readiness/epics/2026-05-07-quote-production-accuracy.md`
-Active slice: Slice 1 — quote simulation service extraction.
-Latest session log: `backend/docs/initiatives/production-endpoint-readiness/sessions/2026-05-07-production-chart-source-behavior.md`
+Active slice: Slice 2 — deposit YT quote previews.
+Latest session log: `backend/docs/initiatives/production-endpoint-readiness/sessions/2026-05-07-quote-simulation-service-extraction.md`
 
 Do not scan unrelated backend plans, initiatives, sessions, or raw docs. Read only:
 1. `AGENTS.md`
@@ -20,26 +20,25 @@ Do not scan unrelated backend plans, initiatives, sessions, or raw docs. Read on
 5. `backend/docs/initiatives/production-endpoint-readiness/tracker.md`
 6. `backend/docs/initiatives/production-endpoint-readiness/epics/2026-05-07-quote-production-accuracy.md`
 7. latest session log named above
-8. source files needed for the active quote slice only.
+8. source files needed for Slice 2 only.
 
-Work one bounded slice only: quote simulation service extraction.
+Work one bounded slice only: deposit YT quote previews.
 
-Slice scope:
-- Move base instant simulation logic out of `QuotesService` into `QuoteSimulationService`.
-- Add tranche preview helper seams required by later quote slices only if they fit the bounded extraction.
-- Preserve action hints and no-calldata behavior.
-- Preserve existing quote API behavior unless tests prove extraction requires source-label/doc changes.
+Slice 2 scope:
+- Use tranche `previewDeposit(amountYt)` for `sharesOut` instead of identity assumption.
+- Preserve derived NAV/risk capacity checks.
+- Do not require sender or encoded calldata.
+- Set source labels so `sharesOut` is `live_contract_preview` when preview succeeds and constraints remain `derived`.
 
 Likely files:
-- `backend/src/modules/quotes/quote-simulation.service.ts`
 - `backend/src/modules/quotes/quotes.service.ts`
-- `backend/src/modules/quotes/quote-simulation.service.spec.ts`
-- `backend/src/shared/blockchain/contract-reader.service.ts` only if helper seams are required.
-- `docs/canonical/api-contract.md` only if request/response source fields change.
+- `backend/src/modules/quotes/quote-simulation.service.ts` if preview helper belongs there
+- `backend/src/shared/blockchain/contract-reader.service.ts` for preview read helper if needed
+- quotes service/controller specs
+- `docs/canonical/api-contract.md` if response sources/fields change.
 
 Required verification:
-- Targeted quote simulation tests.
-- Relevant quote service/controller tests.
+- Targeted deposit YT quote tests.
 - `pnpm test -- quotes`
 - `pnpm lint` if source changes.
 - Additional tests if touched areas require them.
