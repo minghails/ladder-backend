@@ -195,8 +195,8 @@ describe('FE-ready Swagger documentation', () => {
 
     const earnings = document.paths['/portfolio/{address}/earnings']?.get;
     expect(earnings?.summary).toBe('Get portfolio earnings section');
-    expect(earnings?.description).toContain('lazy-loaded earnings table and chart data');
-    expect(earnings?.responses['200']?.description).toContain('Portfolio earnings table and chart payload');
+    expect(earnings?.description).toContain('lazy-loaded earnings table and history data');
+    expect(earnings?.responses['200']?.description).toContain('Portfolio earnings table and history payload');
     expect(earnings?.parameters?.some((parameter) => 'name' in parameter && parameter.name === 'range')).toBe(true);
 
     const claimables = document.paths['/portfolio/{address}/claimables']?.get;

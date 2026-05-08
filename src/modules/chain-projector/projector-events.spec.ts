@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeEventArgs, SUPPORTED_MARKET_EVENT_NAMES } from './projector-events';
+import { normalizeEventArgs, REQUIRED_PORTFOLIO_EVENT_NAMES, SUPPORTED_MARKET_EVENT_NAMES } from './projector-events';
 
 describe('projector events', () => {
   it('converts bigint args to decimal strings', () => {
@@ -44,5 +44,19 @@ describe('projector events', () => {
   it('exports supported market event names', () => {
     expect(SUPPORTED_MARKET_EVENT_NAMES).toContain('DepositYT');
     expect(SUPPORTED_MARKET_EVENT_NAMES).toContain('DepositRefunded');
+  });
+
+  it('documents required portfolio projection event coverage', () => {
+    expect(REQUIRED_PORTFOLIO_EVENT_NAMES).toEqual([
+      'DepositYT',
+      'WithdrawYT',
+      'DepositRequested',
+      'DepositBasePulled',
+      'DepositRequestLinked',
+      'DepositSettled',
+      'DepositRejected',
+      'DepositRefunded',
+      'TrancheDeposit',
+    ]);
   });
 });

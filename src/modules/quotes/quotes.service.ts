@@ -1,12 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   ContractReaderService,
   type LiveMarketState,
 } from '@shared/blockchain/contract-reader.service';
+import { QuoteSimulationService } from './quote-simulation.service';
 import {
   calculateJuniorWithdrawalCapacity,
   calculateSeniorDepositCapacity,
@@ -63,12 +60,21 @@ function isZeroAddress(address: string): boolean {
 
 @Injectable()
 export class QuotesService {
-  constructor(private readonly contractReader: ContractReaderService) {}
+  constructor(
+    private readonly contractReader: ContractReaderService,
+    private readonly quoteSimulation: QuoteSimulationService,
+  ) {}
 
   async quoteDepositYt(request: DepositYtQuoteRequest) {
     const live = await this.getLiveMarket(request.market);
     const warnings = statusWarnings(live);
     const amountYt = BigInt(request.amountYt);
+    const token = trancheToken(live, request.tranche);
+    const sharesOut = await this.quoteSimulation.previewDeposit({
+      trancheToken: token,
+      tranche: request.tranche,
+      amountYt: request.amountYt,
+    });
     const depositValue = (amountYt * BigInt(live.latestYtPrice)) / 10n ** 18n;
     const navStAfter = BigInt(live.navSt) + (request.tranche === 'senior' ? depositValue : 0n);
     const navJtAfter = BigInt(live.navJt) + (request.tranche === 'junior' ? depositValue : 0n);
@@ -102,13 +108,13 @@ export class QuotesService {
         token: live.ytTokenAddress,
       },
       estimate: {
-        sharesOut: request.amountYt,
+        sharesOut,
         depositValue: depositValue.toString(),
         navAfter: navAfter.toString(),
         navStAfter: navStAfter.toString(),
         navJtAfter: navJtAfter.toString(),
         stJtRatioAfter,
-        estimateType: 'derived',
+        estimateType: 'live_contract_preview',
       },
       availability: {
         available: unavailableReason === null,
@@ -133,7 +139,8 @@ export class QuotesService {
       dataQuality: {
         sources: {
           marketState: 'live_contract',
-          estimate: 'derived',
+          sharesOut: 'live_contract_preview',
+          estimate: 'live_contract_preview',
           constraints: 'derived',
         },
       },
@@ -167,7 +174,7 @@ export class QuotesService {
     const baseUnavailableReason = unavailableReason ?? (missingSender ? 'SENDER_REQUIRED' : null);
     const simulation = baseUnavailableReason
       ? null
-      : await this.contractReader.simulateDepositBaseInstant({
+      : await this.quoteSimulation.simulateDepositBaseInstant({
           market: live.address,
           asSenior: request.tranche === 'senior',
           tokenIn: live.baseTokenAddress,
@@ -272,7 +279,18 @@ export class QuotesService {
           : juniorCapacityExceeded
             ? 'JUNIOR_WITHDRAWAL_CAPACITY_EXCEEDED'
             : null;
-    const outputEstimateType = mode === 'assets' ? 'derived' : 'derived_identity';
+    const preview = mode === 'shares'
+      ? await this.quoteSimulation.previewRedeem({
+          trancheToken: token,
+          tranche: request.tranche,
+          shares: amount,
+        })
+      : await this.quoteSimulation.previewWithdraw({
+          trancheToken: token,
+          tranche: request.tranche,
+          amountYt: amount,
+        });
+    const outputEstimateType = 'live_contract_preview';
 
     if (juniorCapacityExceeded) {
       warnings.push('JUNIOR_WITHDRAWAL_CAPACITY_EXCEEDED');
@@ -291,7 +309,8 @@ export class QuotesService {
       },
       output: {
         token: live.ytTokenAddress,
-        amount,
+        amount: mode === 'shares' ? preview : amount,
+        ...(mode === 'shares' ? { shares: amount } : { sharesRequired: preview }),
         estimateType: outputEstimateType,
       },
       availability: {

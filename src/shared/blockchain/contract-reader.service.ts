@@ -2,12 +2,24 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Address } from 'viem';
 import { ViemClientService } from './viem-client.service';
 import {
+  ERC20_METADATA_ABI,
   MARKET_ABI,
   MIDAS_ADAPTOR_ABI,
   ST_TRANCHE_ABI,
   JT_TRANCHE_ABI,
   MOCK_USDC_ADDRESS,
 } from './contracts';
+
+export interface TrancheSharePrices {
+  stSharePrice: string;
+  jtSharePrice: string;
+}
+
+export interface TokenMetadata {
+  address: string;
+  symbol: string;
+  decimals: number;
+}
 
 export interface LiveMarketCapabilities {
   depositBaseInstant: boolean;
@@ -62,6 +74,24 @@ export type SimulateDepositBaseInstantResult =
   | { ok: true; ytOut: string; sharesOut: string }
   | { ok: false; reason: string; errorName: string | null };
 
+export interface PreviewDepositInput {
+  trancheToken: string;
+  tranche: 'senior' | 'junior';
+  amountYt: string;
+}
+
+export interface PreviewRedeemInput {
+  trancheToken: string;
+  tranche: 'senior' | 'junior';
+  shares: string;
+}
+
+export interface PreviewWithdrawInput {
+  trancheToken: string;
+  tranche: 'senior' | 'junior';
+  amountYt: string;
+}
+
 const SCALE = 10n ** 18n;
 
 function toStringValue(value: bigint | number | string | boolean): string {
@@ -74,6 +104,10 @@ function toAddress(value: unknown): Address {
 
 function computeValue(assets: bigint, latestYtPrice: bigint): string {
   return ((assets * latestYtPrice) / SCALE).toString();
+}
+
+function trancheAbi(tranche: 'senior' | 'junior') {
+  return tranche === 'senior' ? ST_TRANCHE_ABI : JT_TRANCHE_ABI;
 }
 
 function mapSimulationRevertReason(error: unknown): { reason: string; errorName: string | null } {
@@ -118,6 +152,21 @@ export class ContractReaderService {
   private readonly logger = new Logger(ContractReaderService.name);
 
   constructor(private readonly viem: ViemClientService) {}
+
+  async getTokenMetadata(address: string): Promise<TokenMetadata> {
+    const client = this.viem.getPublicClient();
+    const tokenAddress = address as Address;
+    const [symbol, decimals] = await Promise.all([
+      client.readContract({ address: tokenAddress, abi: ERC20_METADATA_ABI, functionName: 'symbol' }),
+      client.readContract({ address: tokenAddress, abi: ERC20_METADATA_ABI, functionName: 'decimals' }),
+    ]);
+
+    return {
+      address,
+      symbol: toStringValue(symbol),
+      decimals,
+    };
+  }
 
   async getMarketState(): Promise<LiveMarketState> {
     const client = this.viem.getPublicClient();
@@ -188,6 +237,60 @@ export class ContractReaderService {
         withdrawBaseInstant,
       },
     };
+  }
+
+  async getMarketTrancheSharePrices(): Promise<TrancheSharePrices> {
+    const client = this.viem.getPublicClient();
+    const marketAddress = this.viem.getMarketAddress();
+    const [seniorTrancheAddress, juniorTrancheAddress] = await Promise.all([
+      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'st' }),
+      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'jt' }),
+    ]);
+    const [stSharePrice, jtSharePrice] = await Promise.all([
+      client.readContract({ address: toAddress(seniorTrancheAddress), abi: ST_TRANCHE_ABI, functionName: 'convertToAssets', args: [SCALE] }),
+      client.readContract({ address: toAddress(juniorTrancheAddress), abi: JT_TRANCHE_ABI, functionName: 'convertToAssets', args: [SCALE] }),
+    ]);
+
+    return {
+      stSharePrice: toStringValue(stSharePrice),
+      jtSharePrice: toStringValue(jtSharePrice),
+    };
+  }
+
+  async previewDeposit(input: PreviewDepositInput): Promise<string> {
+    const client = this.viem.getPublicClient();
+    const shares = await client.readContract({
+      address: input.trancheToken as Address,
+      abi: trancheAbi(input.tranche),
+      functionName: 'previewDeposit',
+      args: [BigInt(input.amountYt)],
+    });
+
+    return shares.toString();
+  }
+
+  async previewRedeem(input: PreviewRedeemInput): Promise<string> {
+    const client = this.viem.getPublicClient();
+    const assets = await client.readContract({
+      address: input.trancheToken as Address,
+      abi: trancheAbi(input.tranche),
+      functionName: 'previewRedeem',
+      args: [BigInt(input.shares)],
+    });
+
+    return assets.toString();
+  }
+
+  async previewWithdraw(input: PreviewWithdrawInput): Promise<string> {
+    const client = this.viem.getPublicClient();
+    const shares = await client.readContract({
+      address: input.trancheToken as Address,
+      abi: trancheAbi(input.tranche),
+      functionName: 'previewWithdraw',
+      args: [BigInt(input.amountYt)],
+    });
+
+    return shares.toString();
   }
 
   async simulateDepositBaseInstant(input: SimulateDepositBaseInstantInput): Promise<SimulateDepositBaseInstantResult> {

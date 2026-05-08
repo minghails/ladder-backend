@@ -15,8 +15,125 @@ const INPUT = {
 };
 
 describe('ContractReaderService', () => {
+  it('reads ERC20 token symbol and decimals from live contract metadata', async () => {
+    const readContract = vi.fn()
+      .mockResolvedValueOnce('USDC')
+      .mockResolvedValueOnce(6);
+    const service = new ContractReaderService({
+      getPublicClient: () => ({ readContract }),
+    } as never);
+
+    const metadata = await service.getTokenMetadata('0x0000000000000000000000000000000000000002');
+
+    expect(metadata).toEqual({
+      address: '0x0000000000000000000000000000000000000002',
+      symbol: 'USDC',
+      decimals: 6,
+    });
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: '0x0000000000000000000000000000000000000002',
+        functionName: 'symbol',
+      }),
+    );
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: '0x0000000000000000000000000000000000000002',
+        functionName: 'decimals',
+      }),
+    );
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('reads tranche share prices from convertToAssets(1e18)', async () => {
+    const readContract = vi.fn()
+      .mockResolvedValueOnce('0x0000000000000000000000000000000000000005')
+      .mockResolvedValueOnce('0x0000000000000000000000000000000000000006')
+      .mockResolvedValueOnce(1010000000000000000n)
+      .mockResolvedValueOnce(970000000000000000n);
+    const service = new ContractReaderService({
+      getMarketAddress: () => '0x0000000000000000000000000000000000000001',
+      getPublicClient: () => ({ readContract }),
+    } as never);
+
+    const result = await service.getMarketTrancheSharePrices();
+
+    expect(result).toEqual({
+      stSharePrice: '1010000000000000000',
+      jtSharePrice: '970000000000000000',
+    });
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: 'convertToAssets', args: [1000000000000000000n] }),
+    );
+  });
+
+  it('previews deposit shares from selected tranche contract', async () => {
+    const readContract = vi.fn().mockResolvedValue(950000000000000000n);
+    const service = new ContractReaderService({
+      getPublicClient: () => ({ readContract }),
+    } as never);
+
+    const result = await service.previewDeposit({
+      trancheToken: '0x0000000000000000000000000000000000000005',
+      tranche: 'junior',
+      amountYt: '1000000000000000000',
+    });
+
+    expect(result).toBe('950000000000000000');
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: '0x0000000000000000000000000000000000000005',
+        functionName: 'previewDeposit',
+        args: [1000000000000000000n],
+      }),
+    );
+  });
+
+  it('previews redeemed assets from selected tranche contract', async () => {
+    const readContract = vi.fn().mockResolvedValue(480000000000000000n);
+    const service = new ContractReaderService({
+      getPublicClient: () => ({ readContract }),
+    } as never);
+
+    const result = await service.previewRedeem({
+      trancheToken: '0x0000000000000000000000000000000000000005',
+      tranche: 'junior',
+      shares: '500000000000000000',
+    });
+
+    expect(result).toBe('480000000000000000');
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: '0x0000000000000000000000000000000000000005',
+        functionName: 'previewRedeem',
+        args: [500000000000000000n],
+      }),
+    );
+  });
+
+  it('previews shares required from selected tranche contract', async () => {
+    const readContract = vi.fn().mockResolvedValue(1050000000000000000n);
+    const service = new ContractReaderService({
+      getPublicClient: () => ({ readContract }),
+    } as never);
+
+    const result = await service.previewWithdraw({
+      trancheToken: '0x0000000000000000000000000000000000000005',
+      tranche: 'senior',
+      amountYt: '1000000000000000000',
+    });
+
+    expect(result).toBe('1050000000000000000');
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: '0x0000000000000000000000000000000000000005',
+        functionName: 'previewWithdraw',
+        args: [1000000000000000000n],
+      }),
+    );
   });
 
   it('maps undecoded ERC20 insufficient allowance selector from viem raw revert', async () => {

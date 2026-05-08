@@ -43,6 +43,13 @@
       "when": 1778050393350,
       "tag": "0005_lonely_calypso",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778144836285,
+      "tag": "0006_same_toad",
+      "breakpoints": true
     }
   ]
 }

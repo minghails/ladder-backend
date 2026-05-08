@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
+import { QuoteSimulationService } from './quote-simulation.service';
 import { QuotesService } from './quotes.service';
 
 const LIVE_MARKET: LiveMarketState = {
@@ -40,11 +41,16 @@ describe('QuotesService', () => {
   async function createService(liveMarket: LiveMarketState = LIVE_MARKET) {
     const contractReader = {
       getMarketState: vi.fn().mockResolvedValue(liveMarket),
+    };
+    const quoteSimulation = {
       simulateDepositBaseInstant: vi.fn().mockResolvedValue({
         ok: true,
         ytOut: '998000000000000000',
         sharesOut: '998000000000000000',
       }),
+      previewDeposit: vi.fn().mockResolvedValue('950000000000000000'),
+      previewRedeem: vi.fn().mockResolvedValue('480000000000000000'),
+      previewWithdraw: vi.fn().mockResolvedValue('1050000000000000000'),
     };
 
     const module = await Test.createTestingModule({
@@ -54,17 +60,22 @@ describe('QuotesService', () => {
           provide: ContractReaderService,
           useValue: contractReader,
         },
+        {
+          provide: QuoteSimulationService,
+          useValue: quoteSimulation,
+        },
       ],
     }).compile();
 
     return {
       service: module.get(QuotesService),
       contractReader,
+      quoteSimulation,
     };
   }
 
-  it('quotes junior deposit-yt as available with derived estimate and wagmi action hints', async () => {
-    const { service } = await createService();
+  it('quotes junior deposit-yt with tranche preview shares and wagmi action hints', async () => {
+    const { service, quoteSimulation } = await createService();
 
     const quote = await service.quoteDepositYt({
       market: LIVE_MARKET.address,
@@ -72,6 +83,11 @@ describe('QuotesService', () => {
       amountYt: '1000000000000000000',
     });
 
+    expect(quoteSimulation.previewDeposit).toHaveBeenCalledWith({
+      trancheToken: LIVE_MARKET.juniorTrancheAddress,
+      tranche: 'junior',
+      amountYt: '1000000000000000000',
+    });
     expect(quote).toMatchObject({
       input: {
         market: LIVE_MARKET.address,
@@ -80,13 +96,13 @@ describe('QuotesService', () => {
         token: LIVE_MARKET.ytTokenAddress,
       },
       estimate: {
-        sharesOut: '1000000000000000000',
+        sharesOut: '950000000000000000',
         depositValue: '1000000000000000000',
         navAfter: '40000001000000000000000000',
         navStAfter: LIVE_MARKET.navSt,
         navJtAfter: '10000001000000000000000000',
         stJtRatioAfter: '2999999700000029999',
-        estimateType: 'derived',
+        estimateType: 'live_contract_preview',
       },
       availability: {
         available: true,
@@ -111,7 +127,8 @@ describe('QuotesService', () => {
       dataQuality: {
         sources: {
           marketState: 'live_contract',
-          estimate: 'derived',
+          sharesOut: 'live_contract_preview',
+          estimate: 'live_contract_preview',
           constraints: 'derived',
         },
       },
@@ -171,7 +188,7 @@ describe('QuotesService', () => {
   });
 
   it('uses onchain simulation for deposit-base quotes when sender is supplied', async () => {
-    const { service, contractReader } = await createService();
+    const { service, quoteSimulation } = await createService();
 
     const quote = await service.quoteDepositBase({
       market: LIVE_MARKET.address,
@@ -181,7 +198,7 @@ describe('QuotesService', () => {
       minYtOut: '900000000000000000',
     });
 
-    expect(contractReader.simulateDepositBaseInstant).toHaveBeenCalledWith({
+    expect(quoteSimulation.simulateDepositBaseInstant).toHaveBeenCalledWith({
       market: LIVE_MARKET.address,
       asSenior: false,
       tokenIn: LIVE_MARKET.baseTokenAddress,
@@ -201,7 +218,7 @@ describe('QuotesService', () => {
   });
 
   it('requires sender for exact deposit-base simulation', async () => {
-    const { service, contractReader } = await createService();
+    const { service, quoteSimulation } = await createService();
 
     const quote = await service.quoteDepositBase({
       market: LIVE_MARKET.address,
@@ -209,7 +226,7 @@ describe('QuotesService', () => {
       amount: '1000000',
     });
 
-    expect(contractReader.simulateDepositBaseInstant).not.toHaveBeenCalled();
+    expect(quoteSimulation.simulateDepositBaseInstant).not.toHaveBeenCalled();
     expect(quote.availability).toEqual({
       available: false,
       reason: 'SENDER_REQUIRED',
@@ -219,8 +236,8 @@ describe('QuotesService', () => {
   });
 
   it('marks deposit-base unavailable when onchain simulation reverts', async () => {
-    const { service, contractReader } = await createService();
-    contractReader.simulateDepositBaseInstant.mockResolvedValueOnce({
+    const { service, quoteSimulation } = await createService();
+    quoteSimulation.simulateDepositBaseInstant.mockResolvedValueOnce({
       ok: false,
       reason: 'INSUFFICIENT_ALLOWANCE_OR_BALANCE',
       errorName: null,
@@ -308,8 +325,8 @@ describe('QuotesService', () => {
     });
   });
 
-  it('quotes withdraw-yt with derived non-placeholder output', async () => {
-    const { service } = await createService();
+  it('quotes withdraw-yt assets mode with previewWithdraw shares required', async () => {
+    const { service, quoteSimulation } = await createService();
 
     const quote = await service.quoteWithdrawYt({
       market: LIVE_MARKET.address,
@@ -319,20 +336,26 @@ describe('QuotesService', () => {
       receiver: '0x00000000000000000000000000000000000000e1',
     });
 
+    expect(quoteSimulation.previewWithdraw).toHaveBeenCalledWith({
+      trancheToken: LIVE_MARKET.seniorTrancheAddress,
+      tranche: 'senior',
+      amountYt: '1000000000000000000',
+    });
     expect(quote.output).toEqual({
       token: LIVE_MARKET.ytTokenAddress,
       amount: '1000000000000000000',
-      estimateType: 'derived',
+      sharesRequired: '1050000000000000000',
+      estimateType: 'live_contract_preview',
     });
-    expect(quote.dataQuality.sources.output).toBe('derived');
+    expect(quote.dataQuality.sources.output).toBe('live_contract_preview');
     expect(quote.availability).toEqual({
       available: true,
       reason: null,
     });
   });
 
-  it('quotes withdraw-yt shares mode as derived identity until tranche previewRedeem simulation exists', async () => {
-    const { service } = await createService();
+  it('quotes withdraw-yt shares mode with previewRedeem assets out', async () => {
+    const { service, quoteSimulation } = await createService();
 
     const quote = await service.quoteWithdrawYt({
       market: LIVE_MARKET.address,
@@ -342,12 +365,18 @@ describe('QuotesService', () => {
       receiver: '0x00000000000000000000000000000000000000e1',
     });
 
+    expect(quoteSimulation.previewRedeem).toHaveBeenCalledWith({
+      trancheToken: LIVE_MARKET.juniorTrancheAddress,
+      tranche: 'junior',
+      shares: '500000000000000000',
+    });
     expect(quote.output).toEqual({
       token: LIVE_MARKET.ytTokenAddress,
-      amount: '500000000000000000',
-      estimateType: 'derived_identity',
+      amount: '480000000000000000',
+      shares: '500000000000000000',
+      estimateType: 'live_contract_preview',
     });
-    expect(quote.dataQuality.sources.output).toBe('derived_identity');
+    expect(quote.dataQuality.sources.output).toBe('live_contract_preview');
   });
 
   it('maps withdraw-yt assets mode to byShares false', async () => {

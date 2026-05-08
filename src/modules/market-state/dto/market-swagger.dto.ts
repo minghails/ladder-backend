@@ -15,8 +15,11 @@ export class MarketTrancheDto {
   @ApiProperty({ description: 'Live tranche token symbol read from the tranche contract.', example: 'st-mEDGE' })
   symbol!: string;
 
-  @ApiProperty({ description: 'Current backend placeholder APY as a decimal string. Live APY calculation is not implemented yet, so runtime currently returns 0.', example: '0' })
+  @ApiProperty({ description: 'Tranche APY as a decimal string, computed from indexed tranche share-price snapshots when available. Returns 0 when unavailable.', example: '0.121666666666666666' })
   apy!: string;
+
+  @ApiProperty({ description: 'APY data source. unavailable means APY is a display fallback, not live yield.', enum: ['indexed_snapshots', 'unavailable'], example: 'indexed_snapshots' })
+  apySource!: 'indexed_snapshots' | 'unavailable';
 
   @ApiProperty({ description: 'Live tranche NAV/TVL in raw token precision as a string, read from the Market contract. FE should format according to token decimals.', example: '30000000000000000000000000' })
   tvl!: string;
@@ -134,9 +137,17 @@ export class MarketCapabilitiesDto {
   withdrawBaseAsync!: boolean;
 }
 
+class MarketSourceQualityDto {
+  @ApiProperty({ description: 'Market response source labels.', example: { marketState: 'live_contract', apy: 'unavailable', tokenMetadata: 'live_contract' } })
+  sources!: Record<string, string>;
+}
+
 export class MarketListResponseDto {
   @ApiProperty({ description: 'List of markets available for Explore screens.', type: MarketListItemDto, isArray: true })
   markets!: MarketListItemDto[];
+
+  @ApiProperty({ description: 'Top-level source labels for the market list response.', type: MarketSourceQualityDto })
+  dataQuality!: MarketSourceQualityDto;
 }
 
 export class MarketDetailDto extends MarketListItemDto {
@@ -151,6 +162,9 @@ export class MarketDetailDto extends MarketListItemDto {
 
   @ApiProperty({ description: 'Live adaptor/market capability flags. FE should use these to enable or hide actions.', type: MarketCapabilitiesDto })
   capabilities!: MarketCapabilitiesDto;
+
+  @ApiProperty({ description: 'Top-level source labels for the market detail response.', type: MarketSourceQualityDto })
+  dataQuality!: MarketSourceQualityDto;
 }
 
 class DataQualityDto {

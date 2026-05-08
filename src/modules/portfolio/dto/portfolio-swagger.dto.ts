@@ -86,10 +86,10 @@ export class PortfolioMetricsDto {
   @ApiProperty({ description: 'Total portfolio value in raw token precision as a string, computed from live tranche balances and latest YT price.', example: '150000000000000000000' })
   totalValue!: string;
 
-  @ApiProperty({ description: 'Net APY decimal string. Mock-only with includeMock=true until APY calculations are implemented.', example: '0.0425' })
+  @ApiProperty({ description: 'Net APY decimal string. Returns 0 with unavailable source until portfolio APY calculations are implemented.', example: '0' })
   netApy!: string;
 
-  @ApiProperty({ description: 'Net APY source.', enum: DATA_SOURCE_VALUES, example: 'mock' })
+  @ApiProperty({ description: 'Net APY source.', enum: DATA_SOURCE_VALUES, example: 'unavailable' })
   netApySource!: string;
 }
 
@@ -100,13 +100,13 @@ export class PortfolioDataSourcesDto {
   @ApiProperty({ enum: DATA_SOURCE_VALUES, example: 'db' })
   pendingRequests!: string;
 
-  @ApiProperty({ enum: DATA_SOURCE_VALUES, example: 'mock' })
+  @ApiProperty({ enum: DATA_SOURCE_VALUES, example: 'indexed_events' })
   earnings!: string;
 
-  @ApiProperty({ enum: DATA_SOURCE_VALUES, example: 'mock' })
+  @ApiProperty({ enum: DATA_SOURCE_VALUES, example: 'indexed_events' })
   earningsHistory!: string;
 
-  @ApiProperty({ enum: DATA_SOURCE_VALUES, example: 'mock' })
+  @ApiProperty({ enum: DATA_SOURCE_VALUES, example: 'unavailable' })
   claimableItems!: string;
 
   @ApiProperty({ enum: DATA_SOURCE_VALUES, example: 'db' })
@@ -114,16 +114,16 @@ export class PortfolioDataSourcesDto {
 }
 
 export class PortfolioDataQualityDto {
-  @ApiProperty({ description: 'Whether earnings are estimated/mock-derived.', example: true })
+  @ApiProperty({ description: 'Whether earnings are estimated. Production earnings/history are not mock-derived.', example: false })
   earningsEstimated!: boolean;
 
-  @ApiProperty({ description: 'Whether historical activity/chart data is available in this response mode.', example: true })
+  @ApiProperty({ description: 'Whether indexed earnings history points are available.', example: false })
   historyAvailable!: boolean;
 
   @ApiProperty({ description: 'Latest indexed activity block, or null when activity indexing is not yet available.', example: null, nullable: true })
   activityIndexedUntilBlock!: string | null;
 
-  @ApiProperty({ description: 'Whether mock fallback data is enabled for this response.', example: true })
+  @ApiProperty({ description: 'Whether mock fallback data is enabled for this response. Portfolio production endpoints return false.', example: false })
   mockEnabled!: boolean;
 
   @ApiProperty({ description: 'Response sections populated from mock data.', type: String, isArray: true, example: ['earnings', 'recentActivities'] })
@@ -318,16 +318,16 @@ export class PortfolioEarningsHistoryDto {
 }
 
 export class PortfolioLinksDto {
-  @ApiProperty({ example: '/portfolio/0xabc/earnings?includeMock=true' })
+  @ApiProperty({ example: '/portfolio/0xabc/earnings' })
   earnings!: string;
 
-  @ApiProperty({ example: '/portfolio/0xabc/claimables?includeMock=true&limit=20' })
+  @ApiProperty({ example: '/portfolio/0xabc/claimables?limit=20' })
   claimables!: string;
 
-  @ApiProperty({ example: '/portfolio/0xabc/requests?includeMock=true&limit=20' })
+  @ApiProperty({ example: '/portfolio/0xabc/requests?limit=20' })
   requests!: string;
 
-  @ApiProperty({ example: '/portfolio/0xabc/activities?includeMock=true&limit=20' })
+  @ApiProperty({ example: '/portfolio/0xabc/activities?limit=20' })
   activities!: string;
 }
 
@@ -380,6 +380,9 @@ export class PortfolioRequestsResponseDto {
 
   @ApiProperty({ type: PageDto })
   page!: PageDto;
+
+  @ApiProperty({ description: 'Data-quality flags and source labels for request rows.', type: PortfolioDataQualityDto })
+  dataQuality!: PortfolioDataQualityDto;
 }
 
 export class PortfolioEarningsResponseDto {
@@ -405,6 +408,9 @@ export class PortfolioClaimablesResponseDto {
 
   @ApiProperty({ type: PageDto })
   page!: PageDto;
+
+  @ApiProperty({ description: 'Data-quality flags and source labels for claimable rows.', type: PortfolioDataQualityDto })
+  dataQuality!: PortfolioDataQualityDto;
 }
 
 export class PortfolioActivitiesResponseDto {
@@ -416,4 +422,7 @@ export class PortfolioActivitiesResponseDto {
 
   @ApiProperty({ type: PageDto })
   page!: PageDto;
+
+  @ApiProperty({ description: 'Data-quality flags and source labels for activity rows.', type: PortfolioDataQualityDto })
+  dataQuality!: PortfolioDataQualityDto;
 }

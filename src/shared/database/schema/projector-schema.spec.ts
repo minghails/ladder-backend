@@ -53,6 +53,8 @@ describe('projector schema', () => {
     expect(columns['source_tx_hash']?.notNull).toBe(true);
     expect(columns['source_log_index']?.notNull).toBe(true);
     expect(columns['yt_price']?.notNull).toBe(true);
+    expect(columns['st_share_price']?.notNull).toBe(true);
+    expect(columns['jt_share_price']?.notNull).toBe(true);
     expect(columns['jt_st_ratio']?.notNull).toBe(true);
     expect(columnNamesForUniqueConstraints(marketSnapshots)).toContainEqual([
       'chain_id',

@@ -58,13 +58,13 @@ export class PortfolioController {
   @ApiOperation({
     summary: 'Get portfolio earnings section',
     description:
-      'Returns lazy-loaded earnings table and chart data. Historical earnings are mock-only until portfolio history/cost-basis calculations are implemented. Use includeMock=true for FE integration data.',
+      'Returns lazy-loaded earnings table and history data from portfolio cost-basis and cashflow projections only. includeMock is ignored for earnings/history production readiness.',
   })
   @ApiParam({ name: 'address', description: 'Wallet address.', example: '0xabcdef0000000000000000000000000000000001' })
   @ApiQuery({ name: 'includeMock', required: false, example: 'true' })
   @ApiQuery({ name: 'range', required: false, enum: ['7d', '30d', '90d'], example: '30d' })
   @ApiQuery({ name: 'granularity', required: false, enum: ['day'], example: 'day' })
-  @ApiOkResponse({ description: 'Portfolio earnings table and chart payload for lazy FE loading.', type: PortfolioEarningsResponseDto })
+  @ApiOkResponse({ description: 'Portfolio earnings table and history payload for lazy FE loading.', type: PortfolioEarningsResponseDto })
   @ApiInternalServerErrorResponse({ description: 'Unexpected server error.', type: ErrorResponseDto })
   getEarnings(
     @Param('address') address: string,
@@ -84,7 +84,7 @@ export class PortfolioController {
   @ApiOperation({
     summary: 'Get portfolio claimable rows',
     description:
-      'Returns lazy-loaded refund claimable rows from rejected, unrefunded async deposit requests. includeMock=true returns bounded disabled mock rows for FE integration.',
+      'Returns lazy-loaded refund claimable rows from rejected, unrefunded async deposit requests. includeMock is ignored for production readiness.',
   })
   @ApiParam({ name: 'address', description: 'Wallet address.', example: '0xabcdef0000000000000000000000000000000001' })
   @ApiQuery({ name: 'includeMock', required: false, example: 'true' })
@@ -105,7 +105,7 @@ export class PortfolioController {
   @ApiOperation({
     summary: 'Get portfolio activity rows',
     description:
-      'Returns lazy-loaded recent activity rows derived from indexed Market events. If no indexed rows exist, includeMock=true returns bounded mock rows for FE integration.',
+      'Returns lazy-loaded recent activity rows derived from indexed Market events. includeMock is ignored for production readiness.',
   })
   @ApiParam({ name: 'address', description: 'Wallet address.', example: '0xabcdef0000000000000000000000000000000001' })
   @ApiQuery({ name: 'includeMock', required: false, example: 'true' })
@@ -126,7 +126,7 @@ export class PortfolioController {
   @ApiOperation({
     summary: 'List portfolio deposit requests',
     description:
-      'Returns paginated deposit request history for the Pending/In Queue transactions section. Rows are read from deposit_requests for the provided wallet as user or receiver; if no DB rows exist, includeMock=true returns bounded mock rows for FE integration.',
+      'Returns paginated deposit request history for the Pending/In Queue transactions section. Rows are read from deposit_requests for the provided wallet as user or receiver. includeMock is ignored for production readiness.',
   })
   @ApiParam({
     name: 'address',
@@ -151,7 +151,7 @@ export class PortfolioController {
   @ApiOperation({
     summary: 'Get lightweight FE-ready portfolio overview',
     description:
-      'Returns lightweight initial-render data from live tranche balances plus bounded previews. It does not include earnings chart payloads; FE should lazy-load split endpoints via links. Use includeMock=true or PORTFOLIO_MOCK_FALLBACK=true for mock-only deferred sections.',
+      'Returns lightweight initial-render data from live tranche balances plus bounded previews. It does not include earnings chart payloads; FE should lazy-load split endpoints via links. includeMock is ignored for production readiness.',
   })
   @ApiParam({
     name: 'address',

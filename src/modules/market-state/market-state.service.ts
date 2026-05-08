@@ -11,12 +11,13 @@ import {
   PRICE_STALE_SECONDS,
   unixSecondsToIso,
 } from './market-calculations';
+import { MarketApyService, type MarketApyResult } from './market-apy.service';
+import { MarketFactsheetService } from './market-factsheet.service';
 import {
   BASE_SEPOLIA_MARKET_NETWORK,
-  MARKET_CHART_FIXTURES,
+  MARKET_CHART_CONFIG,
   type MarketChartMetric,
   type MarketChartRange,
-  MARKET_FACTSHEET_ROWS,
   MARKET_SETTLEMENT_LABELS,
 } from './market-metadata.config';
 
@@ -29,6 +30,7 @@ export interface MarketNetworkDto {
 export interface MarketTrancheDto {
   symbol: string;
   apy: string;
+  apySource: 'indexed_snapshots' | 'unavailable';
   tvl: string;
 }
 
@@ -58,6 +60,7 @@ export interface MarketListItemDto {
 }
 
 export interface MarketDetailDto extends MarketListItemDto {
+  dataQuality: MarketSourceQualityDto;
   underlying: {
     symbol: string;
     address: string;
@@ -85,8 +88,17 @@ export interface MarketDetailDto extends MarketListItemDto {
   };
 }
 
+export interface MarketSourceQualityDto {
+  sources: {
+    marketState: 'live_contract';
+    apy: 'indexed_snapshots' | 'unavailable';
+    tokenMetadata?: 'live_contract';
+  };
+}
+
 export interface MarketListResponseDto {
   markets: MarketListItemDto[];
+  dataQuality: MarketSourceQualityDto;
 }
 
 export interface MarketHistoryQueryOptions {
@@ -155,9 +167,10 @@ function statusWarnings(live: LiveMarketState): string[] {
   return [...(live.halted ? ['MARKET_HALTED'] : []), ...(isPriceStale(live.lastUpdatedTime) ? ['STALE_PRICE'] : [])];
 }
 
-function toMarketDetail(live: LiveMarketState): MarketDetailDto {
+async function toMarketDetail(live: LiveMarketState, contractReader: ContractReaderService, apy: MarketApyResult): Promise<MarketDetailDto> {
   const marketSymbol = stripTranchePrefix(live.seniorSymbol);
   const stalePrice = isPriceStale(live.lastUpdatedTime);
+  const baseTokenMetadata = await contractReader.getTokenMetadata(live.baseTokenAddress);
 
   return {
     address: live.address,
@@ -168,12 +181,14 @@ function toMarketDetail(live: LiveMarketState): MarketDetailDto {
     totalTvl: live.nav,
     senior: {
       symbol: live.seniorSymbol,
-      apy: '0',
+      apy: apy.senior.apy,
+      apySource: apy.senior.source,
       tvl: live.navSt,
     },
     junior: {
       symbol: live.juniorSymbol,
-      apy: '0',
+      apy: apy.junior.apy,
+      apySource: apy.junior.source,
       tvl: live.navJt,
     },
     ratio: {
@@ -190,9 +205,9 @@ function toMarketDetail(live: LiveMarketState): MarketDetailDto {
       symbol: marketSymbol,
       address: live.ytTokenAddress,
       baseToken: {
-        symbol: 'USDC',
+        symbol: baseTokenMetadata.symbol,
         address: live.baseTokenAddress,
-        decimals: 6,
+        decimals: baseTokenMetadata.decimals,
       },
     },
     nav: {
@@ -211,6 +226,13 @@ function toMarketDetail(live: LiveMarketState): MarketDetailDto {
       depositBaseRequest: !live.halted && live.capabilities.depositBaseRequest,
       withdrawBaseAsync: live.capabilities.withdrawBaseAsync,
     },
+    dataQuality: {
+      sources: {
+        marketState: 'live_contract',
+        apy: apy.senior.source === 'indexed_snapshots' || apy.junior.source === 'indexed_snapshots' ? 'indexed_snapshots' : 'unavailable',
+        tokenMetadata: 'live_contract',
+      },
+    },
   };
 }
 
@@ -218,21 +240,26 @@ function toMarketDetail(live: LiveMarketState): MarketDetailDto {
 export class MarketStateService {
   constructor(
     private readonly contractReader: ContractReaderService,
+    private readonly apyService: MarketApyService,
+    private readonly factsheetService: MarketFactsheetService,
     @Optional()
     @Inject(DRIZZLE_DB)
     private readonly db?: MarketStateDatabase,
   ) {}
 
   async listMarkets(): Promise<MarketListResponseDto> {
-    const market = toMarketDetail(await this.contractReader.getMarketState());
+    const live = await this.contractReader.getMarketState();
+    const market = await toMarketDetail(live, this.contractReader, await this.marketApy(live.address));
 
     return {
       markets: [toListItem(market)],
+      dataQuality: market.dataQuality,
     };
   }
 
   async getMarket(address: string): Promise<MarketDetailDto> {
-    return toMarketDetail(await this.getLiveMarket(address));
+    const live = await this.getLiveMarket(address);
+    return toMarketDetail(live, this.contractReader, await this.marketApy(live.address));
   }
 
   async getDepositLimits(address: string) {
@@ -280,12 +307,13 @@ export class MarketStateService {
     const live = await this.getLiveMarket(address);
     const seniorDepositCapacity = calculateSeniorDepositCapacity(live.navSt, live.navJt, live.maxStJtRatio);
     const juniorWithdrawalCapacity = calculateJuniorWithdrawalCapacity(live.navSt, live.navJt, live.maxStJtRatio);
+    const baseTokenMetadata = await this.contractReader.getTokenMetadata(live.baseTokenAddress);
 
     return {
       market: live.address,
       tokens: {
         yt: { symbol: stripTranchePrefix(live.seniorSymbol), address: live.ytTokenAddress, decimals: 18 },
-        base: { symbol: 'USDC', address: live.baseTokenAddress, decimals: 6 },
+        base: { symbol: baseTokenMetadata.symbol, address: live.baseTokenAddress, decimals: baseTokenMetadata.decimals },
         senior: { symbol: live.seniorSymbol, address: live.seniorTrancheAddress, decimals: 18 },
         junior: { symbol: live.juniorSymbol, address: live.juniorTrancheAddress, decimals: 18 },
       },
@@ -323,7 +351,7 @@ export class MarketStateService {
       warnings: statusWarnings(live),
       dataQuality: {
         sources: {
-          tokens: 'live_contract',
+          tokens: 'config_address_live_metadata',
           approvals: 'derived',
           methods: 'contract_abi',
           capabilities: 'live_contract',
@@ -336,15 +364,15 @@ export class MarketStateService {
 
   async getFactsheet(address: string) {
     const live = await this.getLiveMarket(address);
-    const marketSymbol = stripTranchePrefix(live.seniorSymbol);
+    const baseTokenMetadata = await this.contractReader.getTokenMetadata(live.baseTokenAddress);
+    const factsheet = this.factsheetService.build(live, baseTokenMetadata);
 
     return {
       market: live.address,
-      title: `${marketSymbol} Market Factsheet`,
-      rows: MARKET_FACTSHEET_ROWS,
+      ...factsheet,
       dataQuality: {
         sources: {
-          factsheet: 'config',
+          factsheet: factsheet.sources,
         },
       },
     };
@@ -352,10 +380,15 @@ export class MarketStateService {
 
   async getChart(address: string, metric: MarketChartMetric, range: MarketChartRange = '30d') {
     const live = await this.getLiveMarket(address);
-    const fixture = MARKET_CHART_FIXTURES[metric];
+    const chartConfig = MARKET_CHART_CONFIG[metric];
+    const snapshots = await this.readSnapshotRows(live.address);
+    const chronological = [...snapshots].reverse();
+
+    if (metric === 'yield') {
+      return indexedYieldChart(live.address, range, chartConfig, chronological);
+    }
+
     if (isIndexedMetric(metric)) {
-      const snapshots = await this.readSnapshotRows(live.address);
-      const chronological = [...snapshots].reverse();
       const latest = snapshots[0];
 
       return {
@@ -363,9 +396,9 @@ export class MarketStateService {
         metric,
         range,
         headline: {
-          label: fixture.label,
+          label: chartConfig.label,
           value: latest === undefined ? '0' : chartValue(latest, metric),
-          unit: fixture.unit,
+          unit: chartConfig.unit,
           source: 'indexed_events',
         },
         series: chronological.map((snapshot) => ({
@@ -385,9 +418,9 @@ export class MarketStateService {
       metric,
       range,
       headline: {
-        label: fixture.label,
+        label: chartConfig.label,
         value: '0',
-        unit: fixture.unit,
+        unit: chartConfig.unit,
         source: 'unavailable',
       },
       series: [],
@@ -425,6 +458,11 @@ export class MarketStateService {
         },
       },
     };
+  }
+
+  private async marketApy(address: string): Promise<MarketApyResult> {
+    const snapshots = await this.readSnapshotRows(address);
+    return this.apyService.calculate(snapshots);
   }
 
   private async getLiveMarket(address: string): Promise<LiveMarketState> {
@@ -519,4 +557,101 @@ function chartValue(
     return snapshot.ytPrice;
   }
   return snapshot.jtStRatio;
+}
+
+function indexedYieldChart(
+  market: string,
+  range: MarketChartRange,
+  chartConfig: (typeof MARKET_CHART_CONFIG)['yield'],
+  snapshots: Array<typeof marketSnapshots.$inferSelect>,
+) {
+  const valid = snapshots.filter(isValidApySnapshot);
+  if (valid.length < 2) {
+    return unavailableChart(market, 'yield', range, chartConfig);
+  }
+
+  const first = valid[0];
+
+  if (!first) {
+    return unavailableChart(market, 'yield', range, chartConfig);
+  }
+
+  const series = valid.map((snapshot) => ({
+    timestamp: snapshot.snapshotAt.toISOString(),
+    value: yieldApyValue(first, snapshot),
+    source: 'indexed_snapshots' as const,
+  }));
+  const latest = series.at(-1);
+
+  if (!latest) {
+    return unavailableChart(market, 'yield', range, chartConfig);
+  }
+
+  return {
+    market,
+    metric: 'yield' as const,
+    range,
+    headline: {
+      label: chartConfig.label,
+      value: latest.value,
+      unit: chartConfig.unit,
+      source: 'indexed_snapshots' as const,
+    },
+    series,
+    dataQuality: {
+      sources: {
+        series: 'indexed_snapshots' as const,
+      },
+    },
+  };
+}
+
+function unavailableChart(
+  market: string,
+  metric: Exclude<MarketChartMetric, 'tvl' | 'tokenPrice' | 'ratio'>,
+  range: MarketChartRange,
+  chartConfig: (typeof MARKET_CHART_CONFIG)[Exclude<MarketChartMetric, 'tvl' | 'tokenPrice' | 'ratio'>],
+) {
+  return {
+    market,
+    metric,
+    range,
+    headline: {
+      label: chartConfig.label,
+      value: '0',
+      unit: chartConfig.unit,
+      source: 'unavailable' as const,
+    },
+    series: [],
+    dataQuality: {
+      sources: {
+        series: 'unavailable' as const,
+      },
+    },
+  };
+}
+
+function isValidApySnapshot(snapshot: typeof marketSnapshots.$inferSelect): boolean {
+  return BigInt(snapshot.stSharePrice) > 0n && BigInt(snapshot.jtSharePrice) > 0n;
+}
+
+function yieldApyValue(first: typeof marketSnapshots.$inferSelect, latest: typeof marketSnapshots.$inferSelect): string {
+  const daysElapsed = BigInt(Math.floor((latest.snapshotAt.getTime() - first.snapshotAt.getTime()) / 1000)) / 86400n;
+  if (daysElapsed <= 0n) {
+    return '0';
+  }
+  return formatChartScaledDecimal(((BigInt(latest.jtSharePrice) - BigInt(first.jtSharePrice)) * 365n * 10n ** 18n) / (BigInt(first.jtSharePrice) * daysElapsed));
+}
+
+function formatChartScaledDecimal(value: bigint): string {
+  const negative = value < 0n;
+  const absolute = negative ? -value : value;
+  const integer = absolute / 10n ** 18n;
+  const fraction = absolute % 10n ** 18n;
+
+  if (fraction === 0n) {
+    return `${negative ? '-' : ''}${integer.toString()}`;
+  }
+
+  return `${negative ? '-' : ''}${integer.toString()}.${fraction.toString().padStart(18, '0').replace(/0+$/, '')}`;
 }

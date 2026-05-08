@@ -81,6 +81,7 @@ export class MarketSnapshotProjector {
       return undefined;
     }
 
+    const sharePrices = await this.contractReader.getMarketTrancheSharePrices();
     const prior = latestPriorSnapshot(candidates, event);
     const liveFallback =
       event.eventName === 'PriceUpdated' || prior !== undefined
@@ -107,6 +108,8 @@ export class MarketSnapshotProjector {
       navJt,
       jtStRatio: stJtRatio,
       ytPrice,
+      stSharePrice: sharePrices.stSharePrice,
+      jtSharePrice: sharePrices.jtSharePrice,
       halted,
       blockNumber: event.blockNumber,
       blockHash: event.blockHash,
