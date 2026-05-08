@@ -196,6 +196,7 @@ export interface PortfolioRequestsResponseDto {
   walletAddress: string;
   requests: PortfolioRequestDto[];
   page: PageDto;
+  dataQuality: PortfolioDataQualityDto;
 }
 
 export interface PortfolioEarningsResponseDto {
@@ -209,12 +210,14 @@ export interface PortfolioClaimablesResponseDto {
   walletAddress: string;
   items: PortfolioClaimableItemDto[];
   page: PageDto;
+  dataQuality: PortfolioDataQualityDto;
 }
 
 export interface PortfolioActivitiesResponseDto {
   walletAddress: string;
   items: PortfolioActivityDto[];
   page: PageDto;
+  dataQuality: PortfolioDataQualityDto;
 }
 
 type DepositRequestRow = typeof depositRequests.$inferSelect;
@@ -653,6 +656,7 @@ export class PortfolioService {
       walletAddress: normalizedAddress,
       requests: page.items,
       page: page.page,
+      dataQuality: dataQuality(false, 'unavailable', 'unavailable', 'unavailable', 'unavailable'),
     };
   }
 
@@ -688,6 +692,7 @@ export class PortfolioService {
       walletAddress: normalizedAddress,
       items: page.items,
       page: page.page,
+      dataQuality: dataQuality(false, 'unavailable', 'unavailable', 'unavailable', liveClaimables.length > 0 ? 'db' : 'unavailable'),
     };
   }
 
@@ -702,6 +707,7 @@ export class PortfolioService {
       walletAddress: normalizedAddress,
       items: page.items,
       page: page.page,
+      dataQuality: dataQuality(false, indexedActivities.length > 0 ? 'db' : 'unavailable'),
     };
   }
 

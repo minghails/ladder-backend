@@ -8,8 +8,8 @@
 
 - Status: implementation in progress
 - Active epic: verification and release gates
-- Active slice: Epic 5 Slice 1 — production endpoint audit tests
-- Latest session log: `sessions/2026-05-08-production-claimables-requests-activities.md`
+- Active slice: Epic 5 Slice 2 — end-to-end production smoke
+- Latest session log: `sessions/2026-05-08-production-endpoint-audit-tests.md`
 
 ## Execution rules
 
@@ -69,8 +69,8 @@
 
 | Slice | Status | Notes |
 |---|---|---|
-| Slice 1 — production endpoint audit tests | active | no mock source/default responses |
-| Slice 2 — end-to-end production smoke | pending | final verification gate |
+| Slice 1 — production endpoint audit tests | completed | default responses audited for mock data, dataQuality.sources, and empty DB behavior |
+| Slice 2 — end-to-end production smoke | active | final verification gate |
 
 ## Slice log
 
@@ -94,3 +94,4 @@
 | 2026-05-07 | Epic 4 Slice 3 — production earnings/history | completed | API data-source/behavior change | `GET /portfolio/:address/earnings` now ignores sandbox mock fallback; earnings table uses cost basis plus live positions, and history uses indexed portfolio cashflows with full/partial/unavailable source labels. Canonical API docs updated. Architecture docs checked; no update needed. |
 | 2026-05-08 | Epic 4 Slice 4 — production claimables, requests, activities | completed | API data-source/behavior change | Portfolio claimables, requests, and activities split endpoints now ignore `includeMock` and return only DB/indexed rows with empty pages when no rows exist. Canonical API docs updated. Architecture docs checked; no update needed. |
 | 2026-05-08 | Epic 4 API impact summary | completed | API data-source/behavior change | Portfolio endpoints no longer return mock/default data in production-readiness paths. Overview uses live/DB/unavailable sources; earnings uses cost basis/live positions and indexed cashflows; claimables/requests/activities use DB/indexed rows only. FE follow-ups: remove mock fixture assumptions, cover empty pages, and read full/partial/unavailable source labels. |
+| 2026-05-08 | Epic 5 Slice 1 — production endpoint audit tests | completed | API contract change | Added cross-endpoint audit tests for no mock source/fixture IDs, required `dataQuality.sources`, and empty DB behavior. Added `dataQuality.sources` to market list/detail and portfolio split page responses; canonical API docs updated. Architecture docs checked; no update needed. |

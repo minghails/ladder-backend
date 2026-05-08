@@ -60,6 +60,7 @@ export interface MarketListItemDto {
 }
 
 export interface MarketDetailDto extends MarketListItemDto {
+  dataQuality: MarketSourceQualityDto;
   underlying: {
     symbol: string;
     address: string;
@@ -87,8 +88,17 @@ export interface MarketDetailDto extends MarketListItemDto {
   };
 }
 
+export interface MarketSourceQualityDto {
+  sources: {
+    marketState: 'live_contract';
+    apy: 'indexed_snapshots' | 'unavailable';
+    tokenMetadata?: 'live_contract';
+  };
+}
+
 export interface MarketListResponseDto {
   markets: MarketListItemDto[];
+  dataQuality: MarketSourceQualityDto;
 }
 
 export interface MarketHistoryQueryOptions {
@@ -216,6 +226,13 @@ async function toMarketDetail(live: LiveMarketState, contractReader: ContractRea
       depositBaseRequest: !live.halted && live.capabilities.depositBaseRequest,
       withdrawBaseAsync: live.capabilities.withdrawBaseAsync,
     },
+    dataQuality: {
+      sources: {
+        marketState: 'live_contract',
+        apy: apy.senior.source === 'indexed_snapshots' || apy.junior.source === 'indexed_snapshots' ? 'indexed_snapshots' : 'unavailable',
+        tokenMetadata: 'live_contract',
+      },
+    },
   };
 }
 
@@ -236,6 +253,7 @@ export class MarketStateService {
 
     return {
       markets: [toListItem(market)],
+      dataQuality: market.dataQuality,
     };
   }
 

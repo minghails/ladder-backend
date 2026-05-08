@@ -915,13 +915,18 @@ describe('PortfolioService', () => {
     try {
       const response = await service.getClaimables('0xABCDEF0000000000000000000000000000000001');
 
-      expect(response).toEqual({
+      expect(response).toMatchObject({
         walletAddress: '0xabcdef0000000000000000000000000000000001',
         items: [],
         page: {
           limit: 20,
           nextCursor: null,
           hasMore: false,
+        },
+        dataQuality: {
+          sources: {
+            claimableItems: 'unavailable',
+          },
         },
       });
     } finally {

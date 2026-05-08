@@ -137,9 +137,17 @@ export class MarketCapabilitiesDto {
   withdrawBaseAsync!: boolean;
 }
 
+class MarketSourceQualityDto {
+  @ApiProperty({ description: 'Market response source labels.', example: { marketState: 'live_contract', apy: 'unavailable', tokenMetadata: 'live_contract' } })
+  sources!: Record<string, string>;
+}
+
 export class MarketListResponseDto {
   @ApiProperty({ description: 'List of markets available for Explore screens.', type: MarketListItemDto, isArray: true })
   markets!: MarketListItemDto[];
+
+  @ApiProperty({ description: 'Top-level source labels for the market list response.', type: MarketSourceQualityDto })
+  dataQuality!: MarketSourceQualityDto;
 }
 
 export class MarketDetailDto extends MarketListItemDto {
@@ -154,6 +162,9 @@ export class MarketDetailDto extends MarketListItemDto {
 
   @ApiProperty({ description: 'Live adaptor/market capability flags. FE should use these to enable or hide actions.', type: MarketCapabilitiesDto })
   capabilities!: MarketCapabilitiesDto;
+
+  @ApiProperty({ description: 'Top-level source labels for the market detail response.', type: MarketSourceQualityDto })
+  dataQuality!: MarketSourceQualityDto;
 }
 
 class DataQualityDto {

@@ -9,8 +9,8 @@ Active initiative: `backend/docs/initiatives/production-endpoint-readiness/`
 Active tracker: `backend/docs/initiatives/production-endpoint-readiness/tracker.md`
 Active plan: `backend/docs/plans/2026-05-07-production-endpoint-readiness.md`
 Active epic: `backend/docs/initiatives/production-endpoint-readiness/epics/2026-05-07-verification-release-gates.md`
-Active slice: Slice 1 — production endpoint audit tests.
-Latest session log: `backend/docs/initiatives/production-endpoint-readiness/sessions/2026-05-08-production-claimables-requests-activities.md`
+Active slice: Slice 2 — end-to-end production smoke.
+Latest session log: `backend/docs/initiatives/production-endpoint-readiness/sessions/2026-05-08-production-endpoint-audit-tests.md`
 
 Do not scan unrelated backend plans, initiatives, sessions, or raw docs. Read only:
 1. `AGENTS.md`
@@ -22,12 +22,12 @@ Do not scan unrelated backend plans, initiatives, sessions, or raw docs. Read on
 7. latest session log named above
 8. source files needed for active slice only.
 
-Work one bounded slice only: production endpoint audit tests.
+Work one bounded slice only: end-to-end production smoke.
 
-Slice 1 scope:
-- Add test that searches responses from default API mode and fails if `source='mock'` or known mock fixture IDs appear.
-- Add contract for `dataQuality.sources` on all affected endpoints.
-- Add tests for empty DB behavior.
+Slice 2 scope:
+- Add or extend e2e smoke covering market load, quote, tx/projector indexing, portfolio refresh, and no mock data.
+- Run full verification commands from the plan or document exact blockers.
+- Add final API impact summary to tracker if epic completes.
 
 Before marking slice done:
 - Check `docs/canonical/backend-architecture.md` and backend architecture docs only for relevant changes.

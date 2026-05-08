@@ -380,6 +380,9 @@ export class PortfolioRequestsResponseDto {
 
   @ApiProperty({ type: PageDto })
   page!: PageDto;
+
+  @ApiProperty({ description: 'Data-quality flags and source labels for request rows.', type: PortfolioDataQualityDto })
+  dataQuality!: PortfolioDataQualityDto;
 }
 
 export class PortfolioEarningsResponseDto {
@@ -405,6 +408,9 @@ export class PortfolioClaimablesResponseDto {
 
   @ApiProperty({ type: PageDto })
   page!: PageDto;
+
+  @ApiProperty({ description: 'Data-quality flags and source labels for claimable rows.', type: PortfolioDataQualityDto })
+  dataQuality!: PortfolioDataQualityDto;
 }
 
 export class PortfolioActivitiesResponseDto {
@@ -416,4 +422,7 @@ export class PortfolioActivitiesResponseDto {
 
   @ApiProperty({ type: PageDto })
   page!: PageDto;
+
+  @ApiProperty({ description: 'Data-quality flags and source labels for activity rows.', type: PortfolioDataQualityDto })
+  dataQuality!: PortfolioDataQualityDto;
 }
