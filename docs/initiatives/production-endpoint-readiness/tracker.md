@@ -6,10 +6,10 @@
 
 ## Current status
 
-- Status: implementation in progress
-- Active epic: verification and release gates
-- Active slice: Epic 5 Slice 2 — end-to-end production smoke
-- Latest session log: `sessions/2026-05-08-production-endpoint-audit-tests.md`
+- Status: implementation complete; full verification passing
+- Active epic: verification and release gates completed
+- Active slice: none
+- Latest session log: `sessions/2026-05-08-production-smoke.md`
 
 ## Execution rules
 
@@ -28,7 +28,7 @@
 | Market metadata, APY, factsheet, charts | `epics/2026-05-07-market-metadata-apy-charts.md` | completed |
 | Quote production accuracy | `epics/2026-05-07-quote-production-accuracy.md` | completed |
 | Portfolio read models without mocks | `epics/2026-05-07-portfolio-read-models.md` | completed |
-| Verification and release gates | `epics/2026-05-07-verification-release-gates.md` | active |
+| Verification and release gates | `epics/2026-05-07-verification-release-gates.md` | completed |
 
 ## Slice backlog
 
@@ -70,7 +70,7 @@
 | Slice | Status | Notes |
 |---|---|---|
 | Slice 1 — production endpoint audit tests | completed | default responses audited for mock data, dataQuality.sources, and empty DB behavior |
-| Slice 2 — end-to-end production smoke | active | final verification gate |
+| Slice 2 — end-to-end production smoke | completed | HTTP e2e smoke and live/fork chain contract-reader smoke added; full verification passing |
 
 ## Slice log
 
@@ -95,3 +95,5 @@
 | 2026-05-08 | Epic 4 Slice 4 — production claimables, requests, activities | completed | API data-source/behavior change | Portfolio claimables, requests, and activities split endpoints now ignore `includeMock` and return only DB/indexed rows with empty pages when no rows exist. Canonical API docs updated. Architecture docs checked; no update needed. |
 | 2026-05-08 | Epic 4 API impact summary | completed | API data-source/behavior change | Portfolio endpoints no longer return mock/default data in production-readiness paths. Overview uses live/DB/unavailable sources; earnings uses cost basis/live positions and indexed cashflows; claimables/requests/activities use DB/indexed rows only. FE follow-ups: remove mock fixture assumptions, cover empty pages, and read full/partial/unavailable source labels. |
 | 2026-05-08 | Epic 5 Slice 1 — production endpoint audit tests | completed | API contract change | Added cross-endpoint audit tests for no mock source/fixture IDs, required `dataQuality.sources`, and empty DB behavior. Added `dataQuality.sources` to market list/detail and portfolio split page responses; canonical API docs updated. Architecture docs checked; no update needed. |
+| 2026-05-08 | Epic 5 Slice 2 — end-to-end production smoke | completed | No FE-facing API impact | Added HTTP e2e smoke for market load, deposit-YT quote, seeded indexed tx status, portfolio activity refresh, and no mock data. Added expanded local HTTP e2e scenarios across market, quote, portfolio, tx, empty/unavailable, halted/capacity, and no-mock cases plus live/fork chain smoke for Base Sepolia contract-reader market/token/share-price reads, ABI registry, and Market `DepositYT` decode shape; full verification now passes. Architecture docs checked; no update needed. |
+| 2026-05-08 | Epic 5 API impact summary | completed | API contract change | Production readiness gates now cover no-mock default responses, `dataQuality.sources`, empty DB behavior, and HTTP smoke over market/quote/tx/portfolio. FE follow-ups from earlier slices remain: update strict fixtures for source-label/dataQuality fields and no-mock empty states. No new FE-facing API fields in Slice 2. |
