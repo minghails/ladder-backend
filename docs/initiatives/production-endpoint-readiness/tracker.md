@@ -7,9 +7,9 @@
 ## Current status
 
 - Status: implementation in progress
-- Active epic: `epics/2026-05-07-portfolio-read-models.md`
-- Active slice: Slice 4 — production claimables, requests, activities
-- Latest session log: `sessions/2026-05-07-production-earnings-history.md`
+- Active epic: verification and release gates
+- Active slice: Epic 5 Slice 1 — production endpoint audit tests
+- Latest session log: `sessions/2026-05-08-production-claimables-requests-activities.md`
 
 ## Execution rules
 
@@ -27,8 +27,8 @@
 | Mock removal guardrails | `epics/2026-05-07-mock-removal-guardrails.md` | completed |
 | Market metadata, APY, factsheet, charts | `epics/2026-05-07-market-metadata-apy-charts.md` | completed |
 | Quote production accuracy | `epics/2026-05-07-quote-production-accuracy.md` | completed |
-| Portfolio read models without mocks | `epics/2026-05-07-portfolio-read-models.md` | active |
-| Verification and release gates | `epics/2026-05-07-verification-release-gates.md` | pending |
+| Portfolio read models without mocks | `epics/2026-05-07-portfolio-read-models.md` | completed |
+| Verification and release gates | `epics/2026-05-07-verification-release-gates.md` | active |
 
 ## Slice backlog
 
@@ -63,13 +63,13 @@
 | Slice 1 — validate projector event coverage | completed | Required portfolio projection event coverage documented in tests; replay and partial-history behavior covered. |
 | Slice 2 — production portfolio overview | completed | overview ignores sandbox mock fallback and uses live/DB/unavailable sources only |
 | Slice 3 — production earnings/history | completed | earnings use cost basis plus live positions; history uses indexed cashflows or unavailable |
-| Slice 4 — production claimables, requests, activities | active | DB/indexed rows only |
+| Slice 4 — production claimables, requests, activities | completed | split endpoints ignore includeMock and return DB/indexed rows only |
 
 ### Epic 5: Verification and release gates
 
 | Slice | Status | Notes |
 |---|---|---|
-| Slice 1 — production endpoint audit tests | pending | no mock source/default responses |
+| Slice 1 — production endpoint audit tests | active | no mock source/default responses |
 | Slice 2 — end-to-end production smoke | pending | final verification gate |
 
 ## Slice log
@@ -92,3 +92,5 @@
 | 2026-05-07 | Epic 4 Slice 1 — validate projector event coverage | completed | No FE-facing API impact | Added explicit required portfolio event coverage contract and tests for deterministic replay and partial-history marking. Architecture docs checked; no update needed. |
 | 2026-05-07 | Epic 4 Slice 2 — production portfolio overview | completed | API data-source/behavior change | `GET /portfolio/:address` now ignores sandbox mock fallback and returns live tranche total value, DB/indexed overview rows, and unavailable source labels for missing earnings/APY values. Canonical API docs updated. Architecture docs checked; no update needed. |
 | 2026-05-07 | Epic 4 Slice 3 — production earnings/history | completed | API data-source/behavior change | `GET /portfolio/:address/earnings` now ignores sandbox mock fallback; earnings table uses cost basis plus live positions, and history uses indexed portfolio cashflows with full/partial/unavailable source labels. Canonical API docs updated. Architecture docs checked; no update needed. |
+| 2026-05-08 | Epic 4 Slice 4 — production claimables, requests, activities | completed | API data-source/behavior change | Portfolio claimables, requests, and activities split endpoints now ignore `includeMock` and return only DB/indexed rows with empty pages when no rows exist. Canonical API docs updated. Architecture docs checked; no update needed. |
+| 2026-05-08 | Epic 4 API impact summary | completed | API data-source/behavior change | Portfolio endpoints no longer return mock/default data in production-readiness paths. Overview uses live/DB/unavailable sources; earnings uses cost basis/live positions and indexed cashflows; claimables/requests/activities use DB/indexed rows only. FE follow-ups: remove mock fixture assumptions, cover empty pages, and read full/partial/unavailable source labels. |

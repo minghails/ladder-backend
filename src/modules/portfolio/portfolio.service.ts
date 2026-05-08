@@ -6,7 +6,6 @@ import { depositRequests } from '@shared/database/schema';
 import { PortfolioActivityRepository } from './portfolio-activity.repository';
 import { PortfolioClaimablesRepository } from './portfolio-claimables.repository';
 import { PortfolioEarningsRepository, type PortfolioCashflowDto, type PortfolioCostBasisDto } from './portfolio-earnings.repository';
-import { portfolioMockEnabled } from './portfolio-production-mode';
 
 export type PortfolioDataSource = 'live' | 'db' | 'mock' | 'placeholder' | 'unavailable' | 'derived' | 'indexed_events' | 'partial_indexed_events';
 export type PortfolioRequestStatus = 'pending' | 'settled' | 'rejected' | 'refunded';
@@ -379,170 +378,6 @@ function stripTranchePrefix(symbol: string): string {
   return symbol.replace(/^(st|jt)-/, '') || symbol;
 }
 
-function mockClaimableItems(liveMarketAddress: string): PortfolioClaimableItemDto[] {
-  return [
-    {
-      id: 'mock-claim-token-b-1',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token B',
-      date: '2026-04-14T00:00:00.000Z',
-      type: 'transaction_reward',
-      amount: '34207300000',
-      token: 'USDC',
-      action: { label: 'Claim', enabled: false, reason: 'Mock action metadata only' },
-      source: 'mock',
-    },
-    {
-      id: 'mock-claim-token-c-1',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token C',
-      date: '2026-04-10T00:00:00.000Z',
-      type: 'transaction_reward',
-      amount: '89095000000',
-      token: 'USDC',
-      action: { label: 'Claim', enabled: false, reason: 'Mock action metadata only' },
-      source: 'mock',
-    },
-    {
-      id: 'mock-claim-token-d-1',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token D',
-      date: '2026-03-28T00:00:00.000Z',
-      type: 'transaction_reward',
-      amount: '172000000000',
-      token: 'USDC',
-      action: { label: 'Claim', enabled: false, reason: 'Mock action metadata only' },
-      source: 'mock',
-    },
-    {
-      id: 'mock-claim-token-a-1',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token A',
-      date: '2026-03-22T00:00:00.000Z',
-      type: 'transaction_reward',
-      amount: '24500000000',
-      token: 'USDC',
-      action: { label: 'Claim', enabled: false, reason: 'Mock action metadata only' },
-      source: 'mock',
-    },
-  ];
-}
-
-function mockRequests(liveMarketAddress: string): PortfolioRequestDto[] {
-  return [
-    {
-      id: 'mock-request-1',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token B',
-      date: '2026-04-16T00:00:00.000Z',
-      type: 'buy_senior_token',
-      amount: '99800000000',
-      value: '81000000000',
-      status: 'pending',
-      ladderRequestId: 'mock-request-1',
-      adaptorRequestId: null,
-      txHash: null,
-      settlement: { estimatedAt: null, note: 'Mock pending queue row for FE integration' },
-      source: 'mock',
-    },
-    {
-      id: 'mock-request-2',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token D',
-      date: '2026-04-10T00:00:00.000Z',
-      type: 'sell_junior_token' as 'buy_junior_token',
-      amount: '76600000000',
-      value: '42000000000',
-      status: 'pending',
-      ladderRequestId: 'mock-request-2',
-      adaptorRequestId: null,
-      txHash: null,
-      settlement: { estimatedAt: null, note: 'Mock pending queue row for FE integration' },
-      source: 'mock',
-    },
-    {
-      id: 'mock-request-3',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token A',
-      date: '2026-03-28T00:00:00.000Z',
-      type: 'buy_junior_token',
-      amount: '34700000000',
-      value: '8800000000',
-      status: 'pending',
-      ladderRequestId: 'mock-request-3',
-      adaptorRequestId: null,
-      txHash: null,
-      settlement: { estimatedAt: null, note: 'Mock pending queue row for FE integration' },
-      source: 'mock',
-    },
-  ];
-}
-
-function mockActivities(liveMarketAddress: string): PortfolioActivityDto[] {
-  return [
-    {
-      id: 'mock-activity-1',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token A',
-      date: '2026-03-10T00:00:00.000Z',
-      type: 'buy_senior_token',
-      amount: '148000000000000000000',
-      value: '52000000000',
-      status: 'success',
-      txHash: '0x0000000000000000000000000000000000000000000000000000000000000a01',
-      source: 'mock',
-    },
-    {
-      id: 'mock-activity-2',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token A',
-      date: '2026-03-10T00:00:00.000Z',
-      type: 'buy_senior_token',
-      amount: '65000000000000000000',
-      value: '34000000000',
-      status: 'success',
-      txHash: '0x0000000000000000000000000000000000000000000000000000000000000a02',
-      source: 'mock',
-    },
-    {
-      id: 'mock-activity-3',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token B',
-      date: '2026-03-08T00:00:00.000Z',
-      type: 'claim_usdc',
-      amount: '2520000000',
-      value: '2520000000',
-      status: 'success',
-      txHash: '0x0000000000000000000000000000000000000000000000000000000000000a03',
-      source: 'mock',
-    },
-    {
-      id: 'mock-activity-4',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token C',
-      date: '2026-03-07T00:00:00.000Z',
-      type: 'buy_junior_token',
-      amount: '89500000000000000000',
-      value: '50000000000',
-      status: 'rejected',
-      txHash: '0x0000000000000000000000000000000000000000000000000000000000000a04',
-      source: 'mock',
-    },
-    {
-      id: 'mock-activity-5',
-      marketAddress: liveMarketAddress,
-      marketSymbol: 'Token D',
-      date: '2026-03-05T00:00:00.000Z',
-      type: 'sell_senior_token',
-      amount: '10500000000000000000',
-      value: '43450000000',
-      status: 'success',
-      txHash: '0x0000000000000000000000000000000000000000000000000000000000000a05',
-      source: 'mock',
-    },
-  ];
-}
-
 function rangeDays(range: EarningsRange): number {
   switch (range) {
     case '7d':
@@ -729,15 +564,12 @@ function toPortfolioEarningDto(row: PortfolioCostBasisDto, livePositions: LivePo
   };
 }
 
-function links(address: string, includeMock: boolean): PortfolioLinksDto {
-  const mockQuery = includeMock ? '?includeMock=true' : '';
-  const listMockQuery = includeMock ? '?includeMock=true&limit=20' : '?limit=20';
-
+function links(address: string): PortfolioLinksDto {
   return {
-    earnings: `/portfolio/${address}/earnings${mockQuery}`,
-    claimables: `/portfolio/${address}/claimables${listMockQuery}`,
-    requests: `/portfolio/${address}/requests${listMockQuery}`,
-    activities: `/portfolio/${address}/activities${listMockQuery}`,
+    earnings: `/portfolio/${address}/earnings`,
+    claimables: `/portfolio/${address}/claimables?limit=20`,
+    requests: `/portfolio/${address}/requests?limit=20`,
+    activities: `/portfolio/${address}/activities?limit=20`,
   };
 }
 
@@ -802,13 +634,12 @@ export class PortfolioService {
       pendingRequests: pendingRequests.slice(0, OVERVIEW_PENDING_LIMIT),
       recentActivities,
       dataQuality: dataQuality(false, recentActivitiesSource, earningsSummary.currentEarningSource, 'unavailable', claimableSummary.source),
-      links: links(normalizedAddress, false),
+      links: links(normalizedAddress),
     };
   }
 
   async getRequests(address: string, options?: PortfolioListOptions): Promise<PortfolioRequestsResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = portfolioMockEnabled(options);
     const [liveMarket, requestRows] = await Promise.all([
       this.contractReader.getMarketState(),
       this.readRequests(normalizedAddress),
@@ -816,8 +647,7 @@ export class PortfolioService {
     const realRequests = requestRows.map((row) =>
       toPortfolioRequestDto(row, liveMarket.address, stripTranchePrefix(liveMarket.seniorSymbol)),
     );
-    const sourceRequests = realRequests.length > 0 ? realRequests : includeMock ? mockRequests(liveMarket.address) : [];
-    const page = paginate(sourceRequests, options);
+    const page = paginate(realRequests, options);
 
     return {
       walletAddress: normalizedAddress,
@@ -849,11 +679,10 @@ export class PortfolioService {
 
   async getClaimables(address: string, options?: PortfolioListOptions): Promise<PortfolioClaimablesResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = portfolioMockEnabled(options);
     const liveMarket = await this.contractReader.getMarketState();
     const marketSymbol = stripTranchePrefix(liveMarket.seniorSymbol);
-    const liveClaimables = includeMock ? [] : await this.claimablesRepository.findByWallet(normalizedAddress, marketSymbol);
-    const page = paginate(includeMock ? mockClaimableItems(liveMarket.address) : liveClaimables, options);
+    const liveClaimables = await this.claimablesRepository.findByWallet(normalizedAddress, marketSymbol);
+    const page = paginate(liveClaimables, options);
 
     return {
       walletAddress: normalizedAddress,
@@ -864,12 +693,10 @@ export class PortfolioService {
 
   async getActivities(address: string, options?: PortfolioListOptions): Promise<PortfolioActivitiesResponseDto> {
     const normalizedAddress = normalizeAddress(address);
-    const includeMock = portfolioMockEnabled(options);
     const liveMarket = await this.contractReader.getMarketState();
     const marketSymbol = stripTranchePrefix(liveMarket.seniorSymbol);
     const indexedActivities = await this.activityRepository.findByWallet(normalizedAddress, marketSymbol);
-    const sourceActivities = indexedActivities.length > 0 ? indexedActivities : includeMock ? mockActivities(liveMarket.address) : [];
-    const page = paginate(sourceActivities, options);
+    const page = paginate(indexedActivities, options);
 
     return {
       walletAddress: normalizedAddress,

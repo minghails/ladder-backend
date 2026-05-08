@@ -123,7 +123,7 @@ export class PortfolioDataQualityDto {
   @ApiProperty({ description: 'Latest indexed activity block, or null when activity indexing is not yet available.', example: null, nullable: true })
   activityIndexedUntilBlock!: string | null;
 
-  @ApiProperty({ description: 'Whether mock fallback data is enabled for this response.', example: true })
+  @ApiProperty({ description: 'Whether mock fallback data is enabled for this response. Portfolio production endpoints return false.', example: false })
   mockEnabled!: boolean;
 
   @ApiProperty({ description: 'Response sections populated from mock data.', type: String, isArray: true, example: ['earnings', 'recentActivities'] })
@@ -318,16 +318,16 @@ export class PortfolioEarningsHistoryDto {
 }
 
 export class PortfolioLinksDto {
-  @ApiProperty({ example: '/portfolio/0xabc/earnings?includeMock=true' })
+  @ApiProperty({ example: '/portfolio/0xabc/earnings' })
   earnings!: string;
 
-  @ApiProperty({ example: '/portfolio/0xabc/claimables?includeMock=true&limit=20' })
+  @ApiProperty({ example: '/portfolio/0xabc/claimables?limit=20' })
   claimables!: string;
 
-  @ApiProperty({ example: '/portfolio/0xabc/requests?includeMock=true&limit=20' })
+  @ApiProperty({ example: '/portfolio/0xabc/requests?limit=20' })
   requests!: string;
 
-  @ApiProperty({ example: '/portfolio/0xabc/activities?includeMock=true&limit=20' })
+  @ApiProperty({ example: '/portfolio/0xabc/activities?limit=20' })
   activities!: string;
 }
 

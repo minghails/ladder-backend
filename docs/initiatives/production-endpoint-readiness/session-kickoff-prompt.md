@@ -8,9 +8,9 @@ Read `backend/docs/HANDOFF.md` first and follow it exactly.
 Active initiative: `backend/docs/initiatives/production-endpoint-readiness/`
 Active tracker: `backend/docs/initiatives/production-endpoint-readiness/tracker.md`
 Active plan: `backend/docs/plans/2026-05-07-production-endpoint-readiness.md`
-Active epic: `backend/docs/initiatives/production-endpoint-readiness/epics/2026-05-07-portfolio-read-models.md`
-Active slice: Slice 4 — production claimables, requests, activities.
-Latest session log: `backend/docs/initiatives/production-endpoint-readiness/sessions/2026-05-07-production-earnings-history.md`
+Active epic: `backend/docs/initiatives/production-endpoint-readiness/epics/2026-05-07-verification-release-gates.md`
+Active slice: Slice 1 — production endpoint audit tests.
+Latest session log: `backend/docs/initiatives/production-endpoint-readiness/sessions/2026-05-08-production-claimables-requests-activities.md`
 
 Do not scan unrelated backend plans, initiatives, sessions, or raw docs. Read only:
 1. `AGENTS.md`
@@ -22,14 +22,12 @@ Do not scan unrelated backend plans, initiatives, sessions, or raw docs. Read on
 7. latest session log named above
 8. source files needed for active slice only.
 
-Work one bounded slice only: production claimables, requests, activities.
+Work one bounded slice only: production endpoint audit tests.
 
-Slice 4 scope:
-- Claimables only from rejected, unrefunded async deposit requests where refund is actually available.
-- Requests only from indexed `deposit_requests` rows.
-- Activities only from indexed `market_events` mapped to product activity types.
-- Add pagination tests.
-- Add tests proving `includeMock=true` does not affect production mode.
+Slice 1 scope:
+- Add test that searches responses from default API mode and fails if `source='mock'` or known mock fixture IDs appear.
+- Add contract for `dataQuality.sources` on all affected endpoints.
+- Add tests for empty DB behavior.
 
 Before marking slice done:
 - Check `docs/canonical/backend-architecture.md` and backend architecture docs only for relevant changes.

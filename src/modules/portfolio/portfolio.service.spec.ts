@@ -579,7 +579,7 @@ describe('PortfolioService', () => {
     expect(response.page).toEqual({ limit: 1, nextCursor: '1', hasMore: true });
   });
 
-  it('returns mock requests with pagination only when requested and DB has no rows', async () => {
+  it('returns empty requests when includeMock is requested and DB has no rows', async () => {
     await withPortfolioMockFallback(async () => {
       const { service } = await createService({ fakeDb: { depositRequestRows: [] } });
 
@@ -588,9 +588,8 @@ describe('PortfolioService', () => {
         limit: 2,
       });
 
-      expect(response.requests).toHaveLength(2);
-      expect(response.requests.every((request) => request.source === 'mock')).toBe(true);
-      expect(response.page).toEqual({ limit: 2, nextCursor: '2', hasMore: true });
+      expect(response.requests).toEqual([]);
+      expect(response.page).toEqual({ limit: 2, nextCursor: null, hasMore: false });
     });
   });
 
@@ -869,6 +868,45 @@ describe('PortfolioService', () => {
     );
   });
 
+  it('paginates DB-backed claimables without mock rows', async () => {
+    const { service } = await createService({
+      claimables: [
+        {
+          id: 'refund-42',
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          marketAddress: LIVE_MARKET.address,
+          marketSymbol: 'mEDGE',
+          date: '2026-04-14T00:00:00.000Z',
+          type: 'refund',
+          amount: '99800',
+          token: LIVE_MARKET.baseTokenAddress,
+          action: { label: 'Refund', enabled: true, reason: null },
+          source: 'db',
+        },
+        {
+          id: 'refund-43',
+          walletAddress: '0xabcdef0000000000000000000000000000000001',
+          marketAddress: LIVE_MARKET.address,
+          marketSymbol: 'mEDGE',
+          date: '2026-04-13T00:00:00.000Z',
+          type: 'refund',
+          amount: '50000',
+          token: LIVE_MARKET.baseTokenAddress,
+          action: { label: 'Refund', enabled: true, reason: null },
+          source: 'db',
+        },
+      ],
+    });
+
+    const response = await service.getClaimables('0xABCDEF0000000000000000000000000000000001', {
+      includeMock: true,
+      limit: 1,
+    });
+
+    expect(response.items).toEqual([expect.objectContaining({ id: 'refund-42', source: 'db' })]);
+    expect(response.page).toEqual({ limit: 1, nextCursor: '1', hasMore: true });
+  });
+
   it('returns empty claimables by default without mock rows', async () => {
     const previousMockFallback = process.env['PORTFOLIO_MOCK_FALLBACK'];
     process.env['PORTFOLIO_MOCK_FALLBACK'] = 'true';
@@ -895,7 +933,7 @@ describe('PortfolioService', () => {
     }
   });
 
-  it('preserves explicit includeMock claimables fixture mode for FE sandbox only', async () => {
+  it('returns empty claimables when includeMock is requested without DB rows', async () => {
     await withPortfolioMockFallback(async () => {
       const { service } = await createService();
 
@@ -904,36 +942,26 @@ describe('PortfolioService', () => {
         limit: 2,
       });
 
-      expect(response.items).toHaveLength(2);
-      expect(response.items.every((item) => item.source === 'mock')).toBe(true);
-      expect(response.items.every((item) => !item.action.enabled)).toBe(true);
+      expect(response.items).toEqual([]);
       expect(response.page).toEqual({
         limit: 2,
-        nextCursor: '2',
-        hasMore: true,
+        nextCursor: null,
+        hasMore: false,
       });
     });
   });
 
-  it('returns paginated mock claimables and activities for lazy FE sections', async () => {
+  it('returns empty activities when includeMock is requested without indexed rows', async () => {
     await withPortfolioMockFallback(async () => {
       const { service } = await createService();
 
-      const claimables = await service.getClaimables('0xABCDEF0000000000000000000000000000000001', {
-        includeMock: true,
-        limit: 2,
-      });
-      const activities = await service.getActivities('0xABCDEF0000000000000000000000000000000001', {
+      const response = await service.getActivities('0xABCDEF0000000000000000000000000000000001', {
         includeMock: true,
         limit: 2,
       });
 
-      expect(claimables.items).toHaveLength(2);
-      expect(claimables.items.every((item) => !item.action.enabled)).toBe(true);
-      expect(claimables.page).toEqual({ limit: 2, nextCursor: '2', hasMore: true });
-      expect(activities.items).toHaveLength(2);
-      expect(activities.items.every((item) => item.source === 'mock')).toBe(true);
-      expect(activities.page).toEqual({ limit: 2, nextCursor: '2', hasMore: true });
+      expect(response.items).toEqual([]);
+      expect(response.page).toEqual({ limit: 2, nextCursor: null, hasMore: false });
     });
   });
 });
