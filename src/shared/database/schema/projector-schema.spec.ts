@@ -56,6 +56,7 @@ describe('projector schema', () => {
     expect(columns['st_share_price']?.notNull).toBe(true);
     expect(columns['jt_share_price']?.notNull).toBe(true);
     expect(columns['jt_st_ratio']?.notNull).toBe(true);
+    expect(columns['max_st_jt_ratio']?.notNull).toBe(true);
     expect(columnNamesForUniqueConstraints(marketSnapshots)).toContainEqual([
       'chain_id',
       'market_address',

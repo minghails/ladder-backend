@@ -7,6 +7,14 @@ type MarketEventRow = typeof marketEvents.$inferInsert;
 type MarketSnapshotRow = typeof marketSnapshots.$inferSelect;
 type MarketSnapshotInsert = typeof marketSnapshots.$inferInsert;
 
+interface MaxRatioPoint {
+  chainId: number;
+  marketAddress: string;
+  blockNumber: string;
+  sourceLogIndex: string;
+  maxStJtRatio: string;
+}
+
 interface MarketSnapshotDatabase {
   query: {
     marketSnapshots: {
@@ -22,6 +30,7 @@ interface MarketSnapshotDatabase {
 
 const SNAPSHOT_EVENT_NAMES = new Set([
   'PriceUpdated',
+  'MaxStJtRatioUpdated',
   'DepositYT',
   'WithdrawYT',
   'DepositSettled',
@@ -45,14 +54,41 @@ export class MarketSnapshotProjector {
 
     const existingSnapshots = await this.db.query.marketSnapshots.findMany({});
     const projected: MarketSnapshotInsert[] = [];
+    const maxRatioPoints: MaxRatioPoint[] = existingSnapshots.map((snapshot) => ({
+      chainId: snapshot.chainId,
+      marketAddress: snapshot.marketAddress,
+      blockNumber: snapshot.blockNumber,
+      sourceLogIndex: snapshot.sourceLogIndex,
+      maxStJtRatio: snapshot.maxStJtRatio,
+    }));
 
     for (const event of snapshotEvents) {
+      const maxRatioUpdate = maxRatioFromEvent(event);
+      if (maxRatioUpdate !== undefined) {
+        maxRatioPoints.push(maxRatioUpdate);
+        const snapshot = this.maxRatioSnapshotFromEvent(event, [
+          ...existingSnapshots,
+          ...projected,
+        ], maxRatioUpdate.maxStJtRatio);
+        if (snapshot !== undefined) {
+          projected.push(snapshot);
+        }
+        continue;
+      }
+
       const snapshot = await this.snapshotFromEvent(event, [
         ...existingSnapshots,
         ...projected,
-      ]);
+      ], maxRatioPoints);
       if (snapshot !== undefined) {
         projected.push(snapshot);
+        maxRatioPoints.push({
+          chainId: snapshot.chainId,
+          marketAddress: snapshot.marketAddress,
+          blockNumber: snapshot.blockNumber,
+          sourceLogIndex: snapshot.sourceLogIndex,
+          maxStJtRatio: snapshot.maxStJtRatio,
+        });
       }
     }
 
@@ -66,6 +102,7 @@ export class MarketSnapshotProjector {
   private async snapshotFromEvent(
     event: MarketEventRow,
     candidates: Array<MarketSnapshotRow | MarketSnapshotInsert>,
+    maxRatioPoints: MaxRatioPoint[],
   ): Promise<MarketSnapshotInsert | undefined> {
     const args = event.args as Record<string, unknown>;
     const nav = stringArg(args, 'navAfter');
@@ -83,10 +120,14 @@ export class MarketSnapshotProjector {
 
     const sharePrices = await this.contractReader.getMarketTrancheSharePrices();
     const prior = latestPriorSnapshot(candidates, event);
+    const priorMaxRatio = latestPriorMaxRatio(maxRatioPoints, event);
     const liveFallback =
       event.eventName === 'PriceUpdated' || prior !== undefined
         ? undefined
         : await this.contractReader.getMarketState();
+    const historicalMaxStJtRatio =
+      priorMaxRatio?.maxStJtRatio ??
+      await this.contractReader.getMarketMaxStJtRatioAtBlock(event.blockNumber);
     const ytPrice =
       event.eventName === 'PriceUpdated'
         ? stringArg(args, 'newPrice')
@@ -107,6 +148,7 @@ export class MarketSnapshotProjector {
       navSt,
       navJt,
       jtStRatio: stJtRatio,
+      maxStJtRatio: historicalMaxStJtRatio,
       ytPrice,
       stSharePrice: sharePrices.stSharePrice,
       jtSharePrice: sharePrices.jtSharePrice,
@@ -118,6 +160,53 @@ export class MarketSnapshotProjector {
       snapshotAt: event.blockTimestamp,
     };
   }
+
+  private maxRatioSnapshotFromEvent(
+    event: MarketEventRow,
+    candidates: Array<MarketSnapshotRow | MarketSnapshotInsert>,
+    maxStJtRatio: string,
+  ): MarketSnapshotInsert | undefined {
+    const prior = latestPriorSnapshot(candidates, event);
+    if (prior === undefined) {
+      return undefined;
+    }
+
+    return {
+      chainId: event.chainId,
+      marketAddress: event.marketAddress,
+      nav: prior.nav,
+      navSt: prior.navSt,
+      navJt: prior.navJt,
+      jtStRatio: prior.jtStRatio,
+      maxStJtRatio,
+      ytPrice: prior.ytPrice,
+      stSharePrice: prior.stSharePrice,
+      jtSharePrice: prior.jtSharePrice,
+      halted: prior.halted,
+      blockNumber: event.blockNumber,
+      blockHash: event.blockHash,
+      sourceTxHash: event.txHash,
+      sourceLogIndex: event.logIndex,
+      snapshotAt: event.blockTimestamp,
+    };
+  }
+}
+
+function maxRatioFromEvent(event: MarketEventRow): MaxRatioPoint | undefined {
+  if (event.eventName !== 'MaxStJtRatioUpdated') {
+    return undefined;
+  }
+  const maxStJtRatio = stringArg(event.args as Record<string, unknown>, 'maxStJtRatio');
+  if (maxStJtRatio === undefined) {
+    return undefined;
+  }
+  return {
+    chainId: event.chainId,
+    marketAddress: event.marketAddress,
+    blockNumber: event.blockNumber,
+    sourceLogIndex: event.logIndex,
+    maxStJtRatio,
+  };
 }
 
 function stringArg(
@@ -150,8 +239,22 @@ function latestPriorSnapshot(
     .sort(compareSnapshotIdentityDesc)[0];
 }
 
+function latestPriorMaxRatio(
+  candidates: MaxRatioPoint[],
+  event: MarketEventRow,
+): MaxRatioPoint | undefined {
+  return candidates
+    .filter(
+      (candidate) =>
+        candidate.chainId === event.chainId &&
+        candidate.marketAddress === event.marketAddress &&
+        isAtOrBefore(candidate, event),
+    )
+    .sort(compareSnapshotIdentityDesc)[0];
+}
+
 function isAtOrBefore(
-  snapshot: MarketSnapshotRow | MarketSnapshotInsert,
+  snapshot: MarketSnapshotRow | MarketSnapshotInsert | MaxRatioPoint,
   event: MarketEventRow,
 ): boolean {
   const snapshotBlock = BigInt(snapshot.blockNumber);
@@ -166,8 +269,8 @@ function isAtOrBefore(
 }
 
 function compareSnapshotIdentityDesc(
-  left: MarketSnapshotRow | MarketSnapshotInsert,
-  right: MarketSnapshotRow | MarketSnapshotInsert,
+  left: MarketSnapshotRow | MarketSnapshotInsert | MaxRatioPoint,
+  right: MarketSnapshotRow | MarketSnapshotInsert | MaxRatioPoint,
 ): number {
   const leftBlock = BigInt(left.blockNumber);
   const rightBlock = BigInt(right.blockNumber);

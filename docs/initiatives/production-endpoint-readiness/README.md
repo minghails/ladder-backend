@@ -10,7 +10,7 @@ Make backend endpoints production-safe by removing default/mock data, replacing 
 
 - Remove production/default mock behavior.
 - Lock APY to tranche exchange-rate snapshots: `convertToAssets(1e18)` for ST/JT.
-- Keep utilization unavailable until contracts/adaptor expose idle/deployed/liquidity source state.
+- Back market charts with indexed snapshots for all five FE metrics; derive utilization from `currentStJtRatio / maxStJtRatio`.
 - Improve quotes, market metadata, charts, portfolio read models, and production readiness tests.
 
 ## Out of scope

@@ -2,6 +2,7 @@ export type ProjectedEventName =
   | 'DepositYT'
   | 'WithdrawYT'
   | 'PriceUpdated'
+  | 'MaxStJtRatioUpdated'
   | 'MarketHaltedEvent'
   | 'MarketHaltStatusUpdated'
   | 'CarryFeeAccrued'

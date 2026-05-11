@@ -257,6 +257,19 @@ export class ContractReaderService {
     };
   }
 
+  async getMarketMaxStJtRatioAtBlock(blockNumber: string): Promise<string> {
+    const client = this.viem.getPublicClient();
+    const marketAddress = this.viem.getMarketAddress();
+    const maxStJtRatio = await client.readContract({
+      address: marketAddress,
+      abi: MARKET_ABI,
+      functionName: 'maxStJtRatio',
+      blockNumber: BigInt(blockNumber),
+    });
+
+    return toStringValue(maxStJtRatio);
+  }
+
   async previewDeposit(input: PreviewDepositInput): Promise<string> {
     const client = this.viem.getPublicClient();
     const shares = await client.readContract({

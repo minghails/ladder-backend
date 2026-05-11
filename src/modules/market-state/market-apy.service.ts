@@ -16,9 +16,43 @@ export interface MarketApyResult {
   junior: MarketApyValue;
 }
 
+export interface MarketApySeriesPoint {
+  timestamp: string;
+  value: string;
+  source: 'indexed_snapshots';
+}
+
 const SCALE = 10n ** 18n;
 const SECONDS_PER_DAY = 24n * 60n * 60n;
 const DAYS_PER_YEAR = 365n;
+
+export function calculateRollingApySeries(snapshots: MarketApySnapshot[]): MarketApySeriesPoint[] {
+  const ordered = snapshots
+    .filter(isValidSnapshot)
+    .sort((left, right) => left.snapshotAt.getTime() - right.snapshotAt.getTime());
+  const series: MarketApySeriesPoint[] = [];
+
+  for (let index = 1; index < ordered.length; index += 1) {
+    const previous = ordered[index - 1];
+    const current = ordered[index];
+    if (previous === undefined || current === undefined) {
+      continue;
+    }
+
+    const daysElapsed = BigInt(Math.floor((current.snapshotAt.getTime() - previous.snapshotAt.getTime()) / 1000)) / SECONDS_PER_DAY;
+    if (daysElapsed <= 0n) {
+      continue;
+    }
+
+    series.push({
+      timestamp: current.snapshotAt.toISOString(),
+      value: annualizedApy(previous.jtSharePrice, current.jtSharePrice, daysElapsed).apy,
+      source: 'indexed_snapshots',
+    });
+  }
+
+  return series;
+}
 
 export class MarketApyService {
   calculate(snapshots: MarketApySnapshot[]): MarketApyResult {
@@ -47,6 +81,10 @@ export class MarketApyService {
       senior: annualizedApy(first.stSharePrice, latest.stSharePrice, daysElapsed),
       junior: annualizedApy(first.jtSharePrice, latest.jtSharePrice, daysElapsed),
     };
+  }
+
+  calculateRollingSeries(snapshots: MarketApySnapshot[]): MarketApySeriesPoint[] {
+    return calculateRollingApySeries(snapshots);
   }
 }
 

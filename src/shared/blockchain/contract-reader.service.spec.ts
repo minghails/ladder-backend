@@ -70,6 +70,24 @@ describe('ContractReaderService', () => {
     );
   });
 
+  it('reads historical max ST/JT ratio at a specific block', async () => {
+    const readContract = vi.fn().mockResolvedValue(6000000000000000000n);
+    const service = new ContractReaderService({
+      getMarketAddress: () => '0x0000000000000000000000000000000000000001',
+      getPublicClient: () => ({ readContract }),
+    } as never);
+
+    const result = await service.getMarketMaxStJtRatioAtBlock('100');
+
+    expect(result).toBe('6000000000000000000');
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: 'maxStJtRatio',
+        blockNumber: 100n,
+      }),
+    );
+  });
+
   it('previews deposit shares from selected tranche contract', async () => {
     const readContract = vi.fn().mockResolvedValue(950000000000000000n);
     const service = new ContractReaderService({

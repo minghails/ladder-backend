@@ -9,7 +9,7 @@
 - Status: implementation complete; full verification passing
 - Active epic: verification and release gates completed
 - Active slice: none
-- Latest session log: `sessions/2026-05-08-production-smoke.md`
+- Latest session log: `sessions/2026-05-11-real-market-chart-snapshots.md`
 
 ## Execution rules
 
@@ -46,7 +46,8 @@
 | Slice 1 — live token metadata reads | completed | Added ERC20 metadata reads; base token address remains config/deployment source, symbol/decimals live ERC20 metadata. |
 | Slice 2 — APY snapshots and APY service | completed | `market_snapshots` now stores ST/JT share prices from `convertToAssets(1e18)` and market APY uses indexed snapshots or unavailable fallback. |
 | Slice 3 — production factsheet service | completed | Factsheet rows now combine live contract fields, approved config copy, and explicit source labels; unsourced rows removed. |
-| Slice 4 — production chart source behavior | completed | Yield chart now uses indexed APY snapshots when available; utilization remains unavailable. |
+| Slice 4 — production chart source behavior | completed | Yield chart used indexed APY snapshots; utilization unavailable behavior superseded by 2026-05-11 follow-up. |
+| Follow-up — real market chart snapshots | completed | All five chart metrics now return indexed snapshot series when history exists; empty history is unavailable. |
 
 ### Epic 3: Quote production accuracy
 
@@ -79,11 +80,11 @@
 | 2026-05-07 | Activation | completed | No FE-facing API impact | Initiative scaffold created from plan. |
 | 2026-05-07 | Preparation | completed | No FE-facing API impact | All epics/slices/tracker/kickoff docs generated; no source code implemented. |
 | 2026-05-07 | Slice 1 — production mock policy helper | completed | API data-source/behavior change | Portfolio `includeMock=true` now returns mock rows only when `PORTFOLIO_MOCK_FALLBACK=true` and `NODE_ENV !== 'production'`; canonical API docs updated. Architecture docs checked; no update needed. |
-| 2026-05-07 | Slice 2 — remove production chart fixtures | completed | No FE-facing API impact | Chart fixture values/series removed from config; existing chart API behavior preserved: indexed metrics use snapshots, yield/utilization unavailable. Architecture docs checked; no update needed. |
+| 2026-05-07 | Slice 2 — remove production chart fixtures | completed | No FE-facing API impact | Chart fixture values/series removed from config; then-existing chart API behavior preserved. 2026-05-11 follow-up added real indexed series for all chart metrics. Architecture docs checked; no update needed. |
 | 2026-05-07 | Epic 2 Slice 1 — live token metadata reads | completed | API data-source/behavior change | Base token symbol/decimals now use live ERC20 metadata reads; `trade-constraints` token source label changed to `config_address_live_metadata`; canonical API docs updated. Architecture docs checked; no update needed. |
 | 2026-05-07 | Epic 2 Slice 2 — APY snapshots and APY service | completed | API contract change | Added `apySource` to market tranche objects and APY now comes from indexed tranche share-price snapshots when available; canonical API and backend architecture docs updated. |
 | 2026-05-07 | Epic 2 Slice 3 — production factsheet service | completed | API contract change | Factsheet rows now use live/config/mixed source labels and omit unsourced analytics/config claims; canonical API docs updated. Architecture docs checked; no update needed. |
-| 2026-05-07 | Epic 2 Slice 4 — production chart source behavior | completed | API data-source/behavior change | `yield` charts now use indexed APY snapshots when at least two valid points exist and remain unavailable otherwise; `utilization` remains unavailable; canonical API docs updated. Architecture docs checked; no update needed. |
+| 2026-05-07 | Epic 2 Slice 4 — production chart source behavior | completed | API data-source/behavior change | `yield` charts moved to indexed APY snapshots when at least two valid points exist; 2026-05-11 follow-up superseded utilization unavailable behavior. Canonical API docs updated. Architecture docs checked; no update needed. |
 | 2026-05-07 | Epic 2 API impact summary | completed | API contract change | Market endpoints now expose live token metadata source labels, tranche `apySource`, production factsheet row sources, and indexed/unavailable chart sources. FE follow-ups: update market/factsheet/chart fixtures and read source labels for APY/yield availability. |
 | 2026-05-07 | Epic 3 Slice 1 — quote simulation service extraction | completed | No FE-facing API impact | Extracted base instant simulation delegation into `QuoteSimulationService`; existing deposit-base quote response shape, action hints, and source labels preserved. Architecture docs checked; no update needed. |
 | 2026-05-07 | Epic 3 Slice 2 — deposit YT quote previews | completed | API data-source/behavior change | `POST /quotes/deposit-yt` now uses selected tranche `previewDeposit(amountYt)` for `estimate.sharesOut`; NAV/risk constraints remain derived and no sender/calldata is required. Canonical API docs updated. Architecture docs checked; no update needed. |
@@ -97,3 +98,4 @@
 | 2026-05-08 | Epic 5 Slice 1 — production endpoint audit tests | completed | API contract change | Added cross-endpoint audit tests for no mock source/fixture IDs, required `dataQuality.sources`, and empty DB behavior. Added `dataQuality.sources` to market list/detail and portfolio split page responses; canonical API docs updated. Architecture docs checked; no update needed. |
 | 2026-05-08 | Epic 5 Slice 2 — end-to-end production smoke | completed | No FE-facing API impact | Added HTTP e2e smoke for market load, deposit-YT quote, seeded indexed tx status, portfolio activity refresh, and no mock data. Added expanded local HTTP e2e scenarios across market, quote, portfolio, tx, empty/unavailable, halted/capacity, and no-mock cases plus live/fork chain smoke for Base Sepolia contract-reader market/token/share-price reads, ABI registry, and Market `DepositYT` decode shape; full verification now passes. Architecture docs checked; no update needed. |
 | 2026-05-08 | Epic 5 API impact summary | completed | API contract change | Production readiness gates now cover no-mock default responses, `dataQuality.sources`, empty DB behavior, and HTTP smoke over market/quote/tx/portfolio. FE follow-ups from earlier slices remain: update strict fixtures for source-label/dataQuality fields and no-mock empty states. No new FE-facing API fields in Slice 2. |
+| 2026-05-11 | Follow-up — real market chart snapshots | completed | API contract change | `/markets/:address/charts` now returns real indexed snapshot series for all five metrics when history exists. `yield` uses `MarketApyService` rolling adjacent APY windows, `utilization` derives from `currentStJtRatio / maxStJtRatio`, and empty history returns `dataQuality.sources.charts = "unavailable"`. Canonical API/backend architecture docs updated. |

@@ -11,7 +11,13 @@ import {
   PRICE_STALE_SECONDS,
   unixSecondsToIso,
 } from './market-calculations';
-import { MarketApyService, type MarketApyResult } from './market-apy.service';
+import {
+  calculateRollingApySeries,
+  MarketApyService,
+  type MarketApyResult,
+  type MarketApySeriesPoint,
+  type MarketApySnapshot,
+} from './market-apy.service';
 import { MarketFactsheetService } from './market-factsheet.service';
 import {
   BASE_SEPOLIA_MARKET_NETWORK,
@@ -383,53 +389,21 @@ export class MarketStateService {
     const chartConfig = MARKET_CHART_CONFIG[metric];
     const snapshots = await this.readSnapshotRows(live.address);
     const chronological = [...snapshots].reverse();
+    const rangedChronological = snapshotsInRange(chronological);
 
     if (metric === 'yield') {
-      return indexedYieldChart(live.address, range, chartConfig, chronological);
+      const apySnapshots = chronological.map(toMarketApySnapshot);
+      const rollingSeries = calculateRollingApySeries(apySnapshots);
+      return indexedYieldChart(live.address, range, chartConfig, apySeriesInRange(rollingSeries, chronological));
     }
 
-    if (isIndexedMetric(metric)) {
-      const latest = snapshots[0];
-
-      return {
-        market: live.address,
-        metric,
-        range,
-        headline: {
-          label: chartConfig.label,
-          value: latest === undefined ? '0' : chartValue(latest, metric),
-          unit: chartConfig.unit,
-          source: 'indexed_events',
-        },
-        series: chronological.map((snapshot) => ({
-          timestamp: snapshot.snapshotAt.toISOString(),
-          value: chartValue(snapshot, metric),
-          source: 'indexed_events',
-        })),
-        dataQuality: {
-          sources: {
-            series: 'indexed_events',
-          },
-        },
-      };
+    if (metric === 'utilization') {
+      return indexedSnapshotChart(live.address, metric, range, chartConfig, rangedChronological, (snapshot) =>
+        utilizationValue(snapshot.jtStRatio, snapshot.maxStJtRatio),
+      );
     }
-    return {
-      market: live.address,
-      metric,
-      range,
-      headline: {
-        label: chartConfig.label,
-        value: '0',
-        unit: chartConfig.unit,
-        source: 'unavailable',
-      },
-      series: [],
-      dataQuality: {
-        sources: {
-          series: 'unavailable',
-        },
-      },
-    };
+
+    return indexedSnapshotChart(live.address, metric, range, chartConfig, rangedChronological, (snapshot) => chartValue(snapshot, metric));
   }
 
   async getHistory(
@@ -540,10 +514,12 @@ function compareSnapshotsDesc(
   return leftLog > rightLog ? -1 : 1;
 }
 
-function isIndexedMetric(
-  metric: MarketChartMetric,
-): metric is 'tvl' | 'tokenPrice' | 'ratio' {
-  return metric === 'tvl' || metric === 'tokenPrice' || metric === 'ratio';
+function toMarketApySnapshot(snapshot: typeof marketSnapshots.$inferSelect): MarketApySnapshot {
+  return {
+    stSharePrice: snapshot.stSharePrice,
+    jtSharePrice: snapshot.jtSharePrice,
+    snapshotAt: snapshot.snapshotAt,
+  };
 }
 
 function chartValue(
@@ -559,28 +535,43 @@ function chartValue(
   return snapshot.jtStRatio;
 }
 
+function snapshotsInRange(snapshots: Array<typeof marketSnapshots.$inferSelect>): Array<typeof marketSnapshots.$inferSelect> {
+  if (snapshots.length === 0) {
+    return snapshots;
+  }
+
+  const latest = snapshots.at(-1);
+  if (!latest) {
+    return snapshots;
+  }
+
+  const earliestIncludedMs = latest.snapshotAt.getTime() - 30 * 24 * 60 * 60 * 1000;
+  return snapshots.filter((snapshot) => snapshot.snapshotAt.getTime() >= earliestIncludedMs);
+}
+
+function apySeriesInRange(
+  series: MarketApySeriesPoint[],
+  snapshots: Array<typeof marketSnapshots.$inferSelect>,
+): MarketApySeriesPoint[] {
+  if (snapshots.length === 0) {
+    return series;
+  }
+
+  const latest = snapshots.at(-1);
+  if (!latest) {
+    return series;
+  }
+
+  const earliestIncludedMs = latest.snapshotAt.getTime() - 30 * 24 * 60 * 60 * 1000;
+  return series.filter((point) => new Date(point.timestamp).getTime() >= earliestIncludedMs);
+}
+
 function indexedYieldChart(
   market: string,
   range: MarketChartRange,
   chartConfig: (typeof MARKET_CHART_CONFIG)['yield'],
-  snapshots: Array<typeof marketSnapshots.$inferSelect>,
+  series: MarketApySeriesPoint[],
 ) {
-  const valid = snapshots.filter(isValidApySnapshot);
-  if (valid.length < 2) {
-    return unavailableChart(market, 'yield', range, chartConfig);
-  }
-
-  const first = valid[0];
-
-  if (!first) {
-    return unavailableChart(market, 'yield', range, chartConfig);
-  }
-
-  const series = valid.map((snapshot) => ({
-    timestamp: snapshot.snapshotAt.toISOString(),
-    value: yieldApyValue(first, snapshot),
-    source: 'indexed_snapshots' as const,
-  }));
   const latest = series.at(-1);
 
   if (!latest) {
@@ -600,6 +591,7 @@ function indexedYieldChart(
     series,
     dataQuality: {
       sources: {
+        charts: 'indexed_snapshots' as const,
         series: 'indexed_snapshots' as const,
       },
     },
@@ -608,9 +600,9 @@ function indexedYieldChart(
 
 function unavailableChart(
   market: string,
-  metric: Exclude<MarketChartMetric, 'tvl' | 'tokenPrice' | 'ratio'>,
+  metric: MarketChartMetric,
   range: MarketChartRange,
-  chartConfig: (typeof MARKET_CHART_CONFIG)[Exclude<MarketChartMetric, 'tvl' | 'tokenPrice' | 'ratio'>],
+  chartConfig: (typeof MARKET_CHART_CONFIG)[MarketChartMetric],
 ) {
   return {
     market,
@@ -625,22 +617,64 @@ function unavailableChart(
     series: [],
     dataQuality: {
       sources: {
+        charts: 'unavailable' as const,
         series: 'unavailable' as const,
       },
     },
   };
 }
 
-function isValidApySnapshot(snapshot: typeof marketSnapshots.$inferSelect): boolean {
-  return BigInt(snapshot.stSharePrice) > 0n && BigInt(snapshot.jtSharePrice) > 0n;
+function indexedSnapshotChart(
+  market: string,
+  metric: Exclude<MarketChartMetric, 'yield'>,
+  range: MarketChartRange,
+  chartConfig: (typeof MARKET_CHART_CONFIG)[Exclude<MarketChartMetric, 'yield'>],
+  snapshots: Array<typeof marketSnapshots.$inferSelect>,
+  valueFor: (snapshot: typeof marketSnapshots.$inferSelect) => string | null,
+) {
+  const series = snapshots.flatMap((snapshot) => {
+    const value = valueFor(snapshot);
+    if (value === null) {
+      return [];
+    }
+    return [{
+      timestamp: snapshot.snapshotAt.toISOString(),
+      value,
+      source: 'indexed_snapshots' as const,
+    }];
+  });
+  const latest = series.at(-1);
+
+  if (!latest) {
+    return unavailableChart(market, metric, range, chartConfig);
+  }
+
+  return {
+    market,
+    metric,
+    range,
+    headline: {
+      label: chartConfig.label,
+      value: latest.value,
+      unit: chartConfig.unit,
+      source: 'indexed_snapshots' as const,
+    },
+    series,
+    dataQuality: {
+      sources: {
+        charts: 'indexed_snapshots' as const,
+        series: 'indexed_snapshots' as const,
+      },
+    },
+  };
 }
 
-function yieldApyValue(first: typeof marketSnapshots.$inferSelect, latest: typeof marketSnapshots.$inferSelect): string {
-  const daysElapsed = BigInt(Math.floor((latest.snapshotAt.getTime() - first.snapshotAt.getTime()) / 1000)) / 86400n;
-  if (daysElapsed <= 0n) {
-    return '0';
+function utilizationValue(currentStJtRatio: string, maxStJtRatio: string): string | null {
+  const maxRatio = BigInt(maxStJtRatio);
+  if (maxRatio <= 0n) {
+    return null;
   }
-  return formatChartScaledDecimal(((BigInt(latest.jtSharePrice) - BigInt(first.jtSharePrice)) * 365n * 10n ** 18n) / (BigInt(first.jtSharePrice) * daysElapsed));
+  return formatChartScaledDecimal((BigInt(currentStJtRatio) * 10n ** 18n) / maxRatio);
 }
 
 function formatChartScaledDecimal(value: bigint): string {

@@ -16,6 +16,7 @@ export const SUPPORTED_MARKET_EVENT_NAMES = [
   'DepositYT',
   'WithdrawYT',
   'PriceUpdated',
+  'MaxStJtRatioUpdated',
   'MarketHaltedEvent',
   'MarketHaltStatusUpdated',
   'CarryFeeAccrued',

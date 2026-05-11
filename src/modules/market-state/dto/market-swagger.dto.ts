@@ -359,7 +359,7 @@ class ChartHeadlineDto {
   @ApiProperty({ example: '%' })
   unit!: string;
 
-  @ApiProperty({ example: 'mock' })
+  @ApiProperty({ example: 'indexed_snapshots' })
   source!: string;
 }
 
@@ -370,7 +370,7 @@ class ChartPointDto {
   @ApiProperty({ example: '8.40' })
   value!: string;
 
-  @ApiProperty({ example: 'mock' })
+  @ApiProperty({ example: 'indexed_snapshots' })
   source!: string;
 }
 
@@ -387,7 +387,7 @@ export class MarketChartResponseDto {
   @ApiProperty({ description: 'Metric-specific headline metadata.', type: ChartHeadlineDto })
   headline!: ChartHeadlineDto;
 
-  @ApiProperty({ description: 'Deterministic MVP chart points.', type: ChartPointDto, isArray: true })
+  @ApiProperty({ description: 'Indexed chart points. Empty when indexed history is unavailable.', type: ChartPointDto, isArray: true })
   series!: ChartPointDto[];
 
   @ApiProperty({ description: 'Source labels for this response.', type: DataQualityDto })

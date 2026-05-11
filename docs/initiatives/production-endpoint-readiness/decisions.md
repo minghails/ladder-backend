@@ -12,9 +12,9 @@
    - Fewer than 2 valid points returns `unavailable`.
 
 3. **Utilization**
-   - Return `unavailable`.
-   - Do not derive utilization from NAV, `totalAssets`, capacity, or request counts.
-   - Future utilization requires contract/adaptor source state for idle cash, deployed assets, available liquidity, or equivalent.
+   - Superseded on 2026-05-11 by explicit FE chart requirement.
+   - Chart utilization derives from indexed snapshot `currentStJtRatio` divided by snapshot-time `maxStJtRatio`.
+   - Empty snapshot history returns `unavailable`; no mock/config fallback is allowed.
 
 4. **Admin**
    - Admin endpoints/signers are out of scope for this initiative.

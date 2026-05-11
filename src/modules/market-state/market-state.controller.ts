@@ -71,7 +71,7 @@ export class MarketStateController {
   }
 
   @Get(':address/charts')
-  @ApiOperation({ summary: 'Get market chart payload', description: 'Returns FE-stable chart payloads with explicit source labels. MVP history is deterministic mock/config data.' })
+  @ApiOperation({ summary: 'Get market chart payload', description: 'Returns FE-stable chart payloads from indexed snapshots with explicit unavailable states when history is empty.' })
   @ApiParam({ name: 'address', description: 'Market contract/read-model address. Matching is case-insensitive.' })
   @ApiQuery({ name: 'metric', enum: ['yield', 'tokenPrice', 'tvl', 'utilization', 'ratio'], required: true })
   @ApiQuery({ name: 'range', enum: ['30d'], required: false })

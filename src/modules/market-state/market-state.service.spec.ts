@@ -52,6 +52,7 @@ describe('MarketStateService', () => {
       navSt: '6',
       navJt: '4',
       jtStRatio: '1500000000000000000',
+      maxStJtRatio: '6000000000000000000',
       ytPrice: '1000000000000000000',
       stSharePrice: '1000000000000000000',
       jtSharePrice: '1000000000000000000',
@@ -446,7 +447,7 @@ describe('MarketStateService', () => {
     });
   });
 
-  it('returns yield chart from indexed APY snapshots', async () => {
+  it('returns yield chart from indexed APY snapshot rolling windows', async () => {
     const { service } = await createService(LIVE_MARKET, [
       snapshotRow({
         id: 1,
@@ -464,6 +465,14 @@ describe('MarketStateService', () => {
         jtSharePrice: '1030000000000000000',
         snapshotAt: new Date('2026-05-01T00:00:00.000Z'),
       }),
+      snapshotRow({
+        id: 3,
+        blockNumber: '102',
+        sourceLogIndex: '1',
+        stSharePrice: '1020000000000000000',
+        jtSharePrice: '1060000000000000000',
+        snapshotAt: new Date('2026-05-31T00:00:00.000Z'),
+      }),
     ]);
 
     const chart = await service.getChart(LIVE_MARKET.address, 'yield', '30d');
@@ -472,41 +481,94 @@ describe('MarketStateService', () => {
       metric: 'yield',
       headline: {
         label: 'Yield APY',
-        value: '0.365',
+        value: '0.354368932038834951',
         unit: '%',
         source: 'indexed_snapshots',
       },
       series: [
         {
-          timestamp: '2026-04-01T00:00:00.000Z',
-          value: '0',
+          timestamp: '2026-05-01T00:00:00.000Z',
+          value: '0.365',
           source: 'indexed_snapshots',
         },
         {
-          timestamp: '2026-05-01T00:00:00.000Z',
-          value: '0.365',
+          timestamp: '2026-05-31T00:00:00.000Z',
+          value: '0.354368932038834951',
           source: 'indexed_snapshots',
         },
       ],
       dataQuality: {
         sources: {
+          charts: 'indexed_snapshots',
           series: 'indexed_snapshots',
         },
       },
     });
   });
 
-  it('returns unavailable empty utilization chart instead of mock fixtures', async () => {
+  it('returns utilization chart from indexed snapshot ratio capacity', async () => {
     const { service } = await createService(LIVE_MARKET, [
-      snapshotRow(),
-      snapshotRow({ id: 2, blockNumber: '101' }),
+      snapshotRow({
+        blockNumber: '100',
+        sourceLogIndex: '1',
+        jtStRatio: '3000000000000000000',
+        maxStJtRatio: '4000000000000000000',
+        snapshotAt: new Date('2026-05-04T00:00:00.000Z'),
+      }),
+      snapshotRow({
+        id: 2,
+        blockNumber: '99',
+        sourceLogIndex: '1',
+        jtStRatio: '1500000000000000000',
+        maxStJtRatio: '6000000000000000000',
+        snapshotAt: new Date('2026-05-03T00:00:00.000Z'),
+      }),
+    ]);
+
+    const chart = await service.getChart(LIVE_MARKET.address, 'utilization', '30d');
+
+    expect(chart).toMatchObject({
+      headline: {
+        value: '0.75',
+        source: 'indexed_snapshots',
+      },
+      series: [
+        {
+          timestamp: '2026-05-03T00:00:00.000Z',
+          value: '0.25',
+          source: 'indexed_snapshots',
+        },
+        {
+          timestamp: '2026-05-04T00:00:00.000Z',
+          value: '0.75',
+          source: 'indexed_snapshots',
+        },
+      ],
+      dataQuality: {
+        sources: {
+          charts: 'indexed_snapshots',
+          series: 'indexed_snapshots',
+        },
+      },
+    });
+  });
+
+  it('does not fabricate utilization when snapshot max ratio is missing from backfilled rows', async () => {
+    const { service } = await createService(LIVE_MARKET, [
+      snapshotRow({
+        blockNumber: '100',
+        sourceLogIndex: '1',
+        jtStRatio: '3000000000000000000',
+        maxStJtRatio: '0',
+        snapshotAt: new Date('2026-05-04T00:00:00.000Z'),
+      }),
     ]);
 
     const chart = await service.getChart(LIVE_MARKET.address, 'utilization', '30d');
 
     expect(chart.headline.source).toBe('unavailable');
     expect(chart.series).toEqual([]);
-    expect(chart.dataQuality.sources.series).toBe('unavailable');
+    expect(chart.dataQuality.sources.charts).toBe('unavailable');
   });
 
   it.each([
@@ -538,20 +600,59 @@ describe('MarketStateService', () => {
 
     expect(chart.headline).toMatchObject({
       value,
-      source: 'indexed_events',
+      source: 'indexed_snapshots',
     });
     expect(chart.series).toEqual([
       expect.objectContaining({
         timestamp: '2026-05-03T00:00:00.000Z',
-        source: 'indexed_events',
+        source: 'indexed_snapshots',
       }),
       expect.objectContaining({
         timestamp: '2026-05-04T00:00:00.000Z',
         value,
-        source: 'indexed_events',
+        source: 'indexed_snapshots',
       }),
     ]);
-    expect(chart.dataQuality.sources.series).toBe('indexed_events');
+    expect(chart.dataQuality.sources.series).toBe('indexed_snapshots');
+    expect(chart.dataQuality.sources.charts).toBe('indexed_snapshots');
+  });
+
+  it('limits chart snapshots to the requested 30 day range', async () => {
+    const { service } = await createService(LIVE_MARKET, [
+      snapshotRow({
+        blockNumber: '100',
+        sourceLogIndex: '1',
+        nav: '10',
+        snapshotAt: new Date('2026-05-31T00:00:00.000Z'),
+      }),
+      snapshotRow({
+        id: 2,
+        blockNumber: '99',
+        sourceLogIndex: '1',
+        nav: '9',
+        snapshotAt: new Date('2026-05-01T00:00:00.000Z'),
+      }),
+      snapshotRow({
+        id: 3,
+        blockNumber: '98',
+        sourceLogIndex: '1',
+        nav: '8',
+        snapshotAt: new Date('2026-04-30T23:59:59.000Z'),
+      }),
+    ]);
+
+    const chart = await service.getChart(LIVE_MARKET.address, 'tvl', '30d');
+
+    expect(chart.series).toEqual([
+      expect.objectContaining({
+        timestamp: '2026-05-01T00:00:00.000Z',
+        value: '9',
+      }),
+      expect.objectContaining({
+        timestamp: '2026-05-31T00:00:00.000Z',
+        value: '10',
+      }),
+    ]);
   });
 
   it('returns empty indexed series instead of mock when indexed snapshots are missing', async () => {
@@ -561,10 +662,13 @@ describe('MarketStateService', () => {
 
     expect(chart.headline).toMatchObject({
       value: '0',
-      source: 'indexed_events',
+      source: 'unavailable',
     });
     expect(chart.series).toEqual([]);
-    expect(chart.dataQuality.sources.series).toBe('indexed_events');
+    expect(chart.dataQuality.sources).toMatchObject({
+      charts: 'unavailable',
+      series: 'unavailable',
+    });
   });
 
   it('returns paginated indexed market history', async () => {

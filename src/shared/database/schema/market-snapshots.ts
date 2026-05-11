@@ -21,6 +21,7 @@ export const marketSnapshots = pgTable(
     navSt: text('nav_st').notNull(),
     navJt: text('nav_jt').notNull(),
     jtStRatio: text('jt_st_ratio').notNull(),
+    maxStJtRatio: text('max_st_jt_ratio').notNull(),
     ytPrice: text('yt_price').notNull(),
     stSharePrice: text('st_share_price').notNull(),
     jtSharePrice: text('jt_share_price').notNull(),

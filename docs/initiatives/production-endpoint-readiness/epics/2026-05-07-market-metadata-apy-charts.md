@@ -92,7 +92,7 @@ Replace market metadata/chart placeholders with truthful production data sources
 
 - Keep `tvl`, `tokenPrice`, `ratio` from indexed market snapshots.
 - Use APY snapshots for `yield` when available.
-- Always return `utilization` as unavailable until contracts/adaptor expose source state.
+- Superseded on 2026-05-11: return `utilization` from indexed snapshot `currentStJtRatio / maxStJtRatio` when chart history exists.
 - Remove/isolate fixture series from production paths.
 
 **Likely files**
@@ -104,7 +104,7 @@ Replace market metadata/chart placeholders with truthful production data sources
 
 **Acceptance**
 
-- `utilization` returns empty series + `source='unavailable'`.
+- Superseded on 2026-05-11: `utilization` returns indexed snapshot series when history exists; empty history returns `source='unavailable'`.
 - `yield` returns indexed APY series or unavailable when insufficient snapshots.
 - No fixture chart rows in default/production output.
 

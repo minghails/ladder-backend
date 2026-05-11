@@ -49,6 +49,7 @@ function previousSnapshot(overrides: Partial<typeof marketSnapshots.$inferSelect
     navSt: '1',
     navJt: '1',
     jtStRatio: '1',
+    maxStJtRatio: '6000000000000000000',
     ytPrice: '999',
     stSharePrice: '1000000000000000000',
     jtSharePrice: '1000000000000000000',
@@ -89,7 +90,9 @@ function createProjector({
     getMarketState: vi.fn().mockResolvedValue({
       latestYtPrice: '1234',
       halted: true,
+      maxStJtRatio: '5000000000000000000',
     }),
+    getMarketMaxStJtRatioAtBlock: vi.fn().mockResolvedValue('7000000000000000000'),
     getMarketTrancheSharePrices: vi.fn().mockResolvedValue({
       stSharePrice: '1000000000000000000',
       jtSharePrice: '2000000000000000000',
@@ -122,6 +125,7 @@ describe('MarketSnapshotProjector', () => {
         navSt: '6',
         navJt: '4',
         jtStRatio: '1500000000000000000',
+        maxStJtRatio: '7000000000000000000',
         ytPrice: '1000000000000000000',
         stSharePrice: '1000000000000000000',
         jtSharePrice: '2000000000000000000',
@@ -150,6 +154,7 @@ describe('MarketSnapshotProjector', () => {
           navSt: '6',
           navJt: '4',
           jtStRatio: '1500000000000000000',
+          maxStJtRatio: '6000000000000000000',
           ytPrice: '888',
           halted: 'false',
         }),
@@ -170,7 +175,76 @@ describe('MarketSnapshotProjector', () => {
       | undefined;
     expect(rows?.[1]).toMatchObject({
       ytPrice: '777',
+      maxStJtRatio: '7000000000000000000',
     });
+  });
+
+  it('carries MaxStJtRatioUpdated into later snapshots by event order', async () => {
+    const { projector, snapshotValues } = createProjector({
+      existingSnapshots: [previousSnapshot({ maxStJtRatio: '6000000000000000000' })],
+    });
+
+    await projector.projectEvents([
+      event('MaxStJtRatioUpdated', {
+        logIndex: '2',
+        args: { maxStJtRatio: '4000000000000000000' },
+      }),
+      event('DepositYT', {
+        logIndex: '3',
+      }),
+    ]);
+
+    const rows = snapshotValues.mock.calls[0]?.[0] as
+      | Array<typeof marketSnapshots.$inferInsert>
+      | undefined;
+    expect(rows).toEqual([
+      expect.objectContaining({
+        sourceLogIndex: '2',
+        maxStJtRatio: '4000000000000000000',
+      }),
+      expect.objectContaining({
+        sourceLogIndex: '3',
+        maxStJtRatio: '4000000000000000000',
+      }),
+    ]);
+  });
+
+  it('creates a MaxStJtRatioUpdated snapshot by copying prior market values', async () => {
+    const { projector, snapshotValues } = createProjector({
+      existingSnapshots: [
+        previousSnapshot({
+          nav: '20',
+          navSt: '12',
+          navJt: '8',
+          jtStRatio: '1500000000000000000',
+          ytPrice: '1000000000000000000',
+          maxStJtRatio: '6000000000000000000',
+          stSharePrice: '1100000000000000000',
+          jtSharePrice: '1200000000000000000',
+        }),
+      ],
+    });
+
+    await projector.projectEvents([
+      event('MaxStJtRatioUpdated', {
+        logIndex: '2',
+        args: { maxStJtRatio: '4000000000000000000' },
+      }),
+    ]);
+
+    expect(snapshotValues).toHaveBeenCalledWith([
+      expect.objectContaining({
+        nav: '20',
+        navSt: '12',
+        navJt: '8',
+        jtStRatio: '1500000000000000000',
+        ytPrice: '1000000000000000000',
+        maxStJtRatio: '4000000000000000000',
+        stSharePrice: '1100000000000000000',
+        jtSharePrice: '1200000000000000000',
+        sourceLogIndex: '2',
+      }),
+    ]);
   });
 
   it('does not carry forward future snapshot price during older replay', async () => {
@@ -209,6 +283,19 @@ describe('MarketSnapshotProjector', () => {
       expect.objectContaining({
         ytPrice: '1234',
         halted: 'true',
+      }),
+    ]);
+  });
+
+  it('reads max ST/JT ratio at the event block when no prior cap exists', async () => {
+    const { projector, contractReader, snapshotValues } = createProjector();
+
+    await projector.projectEvents([event('DepositYT')]);
+
+    expect(contractReader.getMarketMaxStJtRatioAtBlock).toHaveBeenCalledWith('100');
+    expect(snapshotValues).toHaveBeenCalledWith([
+      expect.objectContaining({
+        maxStJtRatio: '7000000000000000000',
       }),
     ]);
   });
