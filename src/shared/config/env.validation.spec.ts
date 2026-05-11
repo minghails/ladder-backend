@@ -115,4 +115,63 @@ describe('validateEnv', () => {
       }),
     ).toThrow();
   });
+
+  it('should default corsAllowedOrigins to empty in development when unset', () => {
+    const result = validateEnv({
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/ladder_dev',
+      RPC_URL: 'http://localhost:8545',
+      MARKET_ADDRESS: '0x1234567890123456789012345678901234567890',
+    });
+
+    expect(result.corsAllowedOrigins).toEqual([]);
+  });
+
+  it('should parse CORS_ALLOWED_ORIGINS as comma-separated URLs', () => {
+    const result = validateEnv({
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/ladder_dev',
+      RPC_URL: 'http://localhost:8545',
+      MARKET_ADDRESS: '0x1234567890123456789012345678901234567890',
+      CORS_ALLOWED_ORIGINS:
+        'https://app.example.com, https://staging.example.com ',
+    });
+
+    expect(result.corsAllowedOrigins).toEqual([
+      'https://app.example.com',
+      'https://staging.example.com',
+    ]);
+  });
+
+  it('should reject invalid URLs in CORS_ALLOWED_ORIGINS', () => {
+    expect(() =>
+      validateEnv({
+        DATABASE_URL: 'postgresql://user:pass@localhost:5432/ladder_dev',
+        RPC_URL: 'http://localhost:8545',
+        MARKET_ADDRESS: '0x1234567890123456789012345678901234567890',
+        CORS_ALLOWED_ORIGINS: 'not-a-url',
+      }),
+    ).toThrow();
+  });
+
+  it('should require at least one CORS origin in production', () => {
+    expect(() =>
+      validateEnv({
+        NODE_ENV: 'production',
+        DATABASE_URL: 'postgresql://user:pass@localhost:5432/ladder_dev',
+        RPC_URL: 'http://localhost:8545',
+        MARKET_ADDRESS: '0x1234567890123456789012345678901234567890',
+      }),
+    ).toThrow();
+  });
+
+  it('should accept production env when CORS_ALLOWED_ORIGINS is non-empty', () => {
+    const result = validateEnv({
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/ladder_dev',
+      RPC_URL: 'http://localhost:8545',
+      MARKET_ADDRESS: '0x1234567890123456789012345678901234567890',
+      CORS_ALLOWED_ORIGINS: 'https://app.example.com',
+    });
+
+    expect(result.corsAllowedOrigins).toEqual(['https://app.example.com']);
+  });
 });

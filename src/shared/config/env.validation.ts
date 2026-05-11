@@ -1,5 +1,14 @@
 import { z } from 'zod';
 
+/** Comma-separated origins from `CORS_ALLOWED_ORIGINS`; each entry must be a valid URL. */
+export function parseCorsAllowedOrigins(raw: string | undefined): string[] {
+  const parts = (raw ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return z.array(z.url()).parse(parts);
+}
+
 const envSchema = z
   .object({
     NODE_ENV: z
@@ -12,6 +21,7 @@ const envSchema = z
       .string()
       .regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address'),
     PUBLIC_API_URL: z.url().optional(),
+    CORS_ALLOWED_ORIGINS: z.string().optional(),
     CHAIN_ID: z.coerce.number().int().positive().default(84532),
     DEPLOYMENT_BLOCK: z.coerce.number().int().nonnegative().default(0),
     PROJECTOR_ENABLED: z
@@ -37,13 +47,42 @@ const envSchema = z
       .nonnegative()
       .default(20),
   })
+  .superRefine((config, ctx) => {
+    let corsAllowedOrigins: string[];
+    try {
+      corsAllowedOrigins = parseCorsAllowedOrigins(config.CORS_ALLOWED_ORIGINS);
+    } catch {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'CORS_ALLOWED_ORIGINS must be a comma-separated list of valid URLs',
+        path: ['CORS_ALLOWED_ORIGINS'],
+      });
+      return;
+    }
+    if (config.NODE_ENV === 'production' && corsAllowedOrigins.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'CORS_ALLOWED_ORIGINS must include at least one URL when NODE_ENV is production',
+        path: ['CORS_ALLOWED_ORIGINS'],
+      });
+    }
+  })
   .refine(
     (config) => !config.PROJECTOR_ENABLED || config.DEPLOYMENT_BLOCK > 0,
     {
       message: 'DEPLOYMENT_BLOCK must be greater than 0 when projector is enabled',
       path: ['DEPLOYMENT_BLOCK'],
     },
-  );
+  )
+  .transform((config) => {
+    const corsAllowedOrigins = parseCorsAllowedOrigins(
+      config.CORS_ALLOWED_ORIGINS,
+    );
+    const { CORS_ALLOWED_ORIGINS: _corsRaw, ...rest } = config;
+    return { ...rest, corsAllowedOrigins };
+  });
 
 export type EnvConfig = z.infer<typeof envSchema>;
 

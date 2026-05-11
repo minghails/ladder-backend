@@ -1,9 +1,13 @@
 import { registerAs } from '@nestjs/config';
+import { parseCorsAllowedOrigins } from './env.validation';
 
 export const appConfig = registerAs('app', () => ({
   nodeEnv: process.env['NODE_ENV'] ?? 'development',
   port: parseInt(process.env['PORT'] ?? '3000', 10),
   publicApiUrl: process.env['PUBLIC_API_URL'],
+  corsAllowedOrigins: parseCorsAllowedOrigins(
+    process.env['CORS_ALLOWED_ORIGINS'],
+  ),
 }));
 
 export const databaseConfig = registerAs('database', () => {
