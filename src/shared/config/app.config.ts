@@ -37,3 +37,11 @@ export const projectorConfig = registerAs('projector', () => ({
     10,
   ),
 }));
+
+export const healthConfig = registerAs('health', () => ({
+  timeoutMs: parseInt(process.env['HEALTH_CHECK_TIMEOUT_MS'] ?? '1000', 10),
+  projectorMaxLagBlocks: parseInt(
+    process.env['HEALTH_PROJECTOR_MAX_LAG_BLOCKS'] ?? '20',
+    10,
+  ),
+}));

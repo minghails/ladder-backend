@@ -30,6 +30,12 @@ const envSchema = z
       .int()
       .positive()
       .default(15_000),
+    HEALTH_CHECK_TIMEOUT_MS: z.coerce.number().int().positive().default(1_000),
+    HEALTH_PROJECTOR_MAX_LAG_BLOCKS: z.coerce
+      .number()
+      .int()
+      .nonnegative()
+      .default(20),
   })
   .refine(
     (config) => !config.PROJECTOR_ENABLED || config.DEPLOYMENT_BLOCK > 0,

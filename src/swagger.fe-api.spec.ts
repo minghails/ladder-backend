@@ -6,6 +6,9 @@ import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 import { describe, expect, it, vi } from 'vitest';
 import type { SchemaObject } from '@nestjs/swagger/dist/interfaces/open-api-spec.interface';
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
+import { HealthCheckService } from '@nestjs/terminus';
+import { HealthController } from './shared/common/health/health.controller';
+import { DependencyHealthIndicator } from './shared/common/health/dependency-health.indicator';
 import { MarketStateModule } from './modules/market-state/market-state.module';
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
 import { QuotesModule } from './modules/quotes/quotes.module';
@@ -67,6 +70,49 @@ describe('FE-ready Swagger documentation', () => {
 
     return document;
   }
+
+  async function createHealthDocument() {
+    const module = await Test.createTestingModule({
+      controllers: [HealthController],
+      providers: [
+        {
+          provide: HealthCheckService,
+          useValue: { check: vi.fn() },
+        },
+        {
+          provide: DependencyHealthIndicator,
+          useValue: { isHealthy: vi.fn() },
+        },
+      ],
+    }).compile();
+
+    const app = module.createNestApplication();
+    const document = createFeApiDocument(app);
+    await app.close();
+
+    return document;
+  }
+
+  it('documents operational health endpoints for deploy probes', async () => {
+    const document = await createHealthDocument();
+
+    const health = document.paths['/health']?.get;
+    expect(health?.summary).toBe('Run readiness health checks');
+    expect(health?.description).toContain('PostgreSQL');
+    expect(health?.description).toContain('projector cursor freshness');
+    expect(health?.responses['200']?.description).toContain('Health Check is successful');
+    expect(health?.responses['503']?.description).toContain('Health Check is not successful');
+
+    const ready = document.paths['/health/ready']?.get;
+    expect(ready?.summary).toBe('Run dependency readiness checks');
+    expect(ready?.description).toContain('Railway');
+    expect(ready?.description).toContain('HEALTH_PROJECTOR_MAX_LAG_BLOCKS');
+    expect(ready?.responses['503']?.description).toContain('Health Check is not successful');
+
+    const live = document.paths['/health/live']?.get;
+    expect(live?.summary).toBe('Run process liveness check');
+    expect(live?.description).toContain('Does not check PostgreSQL, RPC, or projector freshness');
+  });
 
   it('documents market endpoints with FE-facing descriptions and schemas', async () => {
     const document = await createDocument();

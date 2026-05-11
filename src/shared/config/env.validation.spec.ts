@@ -67,6 +67,21 @@ describe('validateEnv', () => {
     expect(result.PROJECTOR_POLL_INTERVAL_MS).toBe(15000);
   });
 
+  it('should validate health check timeout and projector lag values', () => {
+    const env = {
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/ladder_dev',
+      RPC_URL: 'http://localhost:8545',
+      MARKET_ADDRESS: '0x1234567890123456789012345678901234567890',
+      HEALTH_CHECK_TIMEOUT_MS: '750',
+      HEALTH_PROJECTOR_MAX_LAG_BLOCKS: '25',
+    };
+
+    const result = validateEnv(env);
+
+    expect(result.HEALTH_CHECK_TIMEOUT_MS).toBe(750);
+    expect(result.HEALTH_PROJECTOR_MAX_LAG_BLOCKS).toBe(25);
+  });
+
   it('should reject a negative deployment block', () => {
     expect(() =>
       validateEnv({

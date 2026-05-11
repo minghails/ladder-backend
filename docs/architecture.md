@@ -16,3 +16,4 @@ Each module maps 1:1 with the canonical architecture. See individual module READ
 - `risk-monitoring` → `market-state`, `shared/database`
 - `tx-status` → `shared/database`
 - `chain-projector` → `shared/blockchain`, `shared/database`, `portfolio` accounting repository
+- `shared/common/health` → `shared/database`, `shared/blockchain`

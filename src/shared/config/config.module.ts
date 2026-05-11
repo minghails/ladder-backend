@@ -6,6 +6,7 @@ import {
   databaseConfig,
   blockchainConfig,
   projectorConfig,
+  healthConfig,
 } from './app.config';
 
 @Global()
@@ -13,7 +14,13 @@ import {
   imports: [
     NestConfigModule.forRoot({
       validate: validateEnv,
-      load: [appConfig, databaseConfig, blockchainConfig, projectorConfig],
+      load: [
+        appConfig,
+        databaseConfig,
+        blockchainConfig,
+        projectorConfig,
+        healthConfig,
+      ],
       isGlobal: true,
     }),
   ],

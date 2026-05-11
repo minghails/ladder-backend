@@ -5,6 +5,7 @@ import { ConfigModule } from './shared/config/config.module';
 import { DatabaseModule } from './shared/database/database.module';
 import { BlockchainModule } from './shared/blockchain/blockchain.module';
 import { HealthController } from './shared/common/health/health.controller';
+import { DependencyHealthIndicator } from './shared/common/health/dependency-health.indicator';
 import { ChainProjectorModule } from './modules/chain-projector/chain-projector.module';
 import { MarketStateModule } from './modules/market-state/market-state.module';
 import { OracleModule } from './modules/oracle/oracle.module';
@@ -40,5 +41,6 @@ import { TxStatusModule } from './modules/tx-status/tx-status.module';
     TxStatusModule,
   ],
   controllers: [HealthController],
+  providers: [DependencyHealthIndicator],
 })
 export class AppModule {}
