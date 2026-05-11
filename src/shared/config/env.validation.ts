@@ -80,7 +80,8 @@ const envSchema = z
     const corsAllowedOrigins = parseCorsAllowedOrigins(
       config.CORS_ALLOWED_ORIGINS,
     );
-    const { CORS_ALLOWED_ORIGINS: _corsRaw, ...rest } = config;
+    const rest = { ...config };
+    delete rest.CORS_ALLOWED_ORIGINS;
     return { ...rest, corsAllowedOrigins };
   });
 

@@ -1,3 +1,4 @@
+import type { CustomOrigin } from '@nestjs/common/interfaces/external/cors-options.interface';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
@@ -6,17 +7,28 @@ import { AppModule } from './app.module';
 import { StandardExceptionFilter } from './shared/common/filters/http-exception.filter';
 import { buildSwaggerConfig } from './swagger.config';
 
-const LOCAL_DEV_CORS_ORIGINS = [
+/**
+ * Always merged in development/test with `CORS_ALLOWED_ORIGINS` (Nest default port + Vite dev port).
+ * Other dev ports: add them via `CORS_ALLOWED_ORIGINS` (comma-separated).
+ */
+const DEFAULT_LOCAL_DEV_CORS_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:5173',
 ] as const;
+
+function configStringArray(config: ConfigService, key: string): string[] {
+  const raw: unknown = config.get(key);
+  return Array.isArray(raw) && raw.every((x): x is string => typeof x === 'string')
+    ? raw
+    : [];
+}
 
 function resolveCorsAllowedOrigins(
   nodeEnv: string,
   configured: readonly string[],
 ): string[] {
   if (nodeEnv === 'development' || nodeEnv === 'test') {
-    return [...new Set([...LOCAL_DEV_CORS_ORIGINS, ...configured])];
+    return [...new Set([...DEFAULT_LOCAL_DEV_CORS_ORIGINS, ...configured])];
   }
   return [...configured];
 }
@@ -29,18 +41,19 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   const nodeEnv =
     config.get<string>('app.nodeEnv', { infer: true }) ?? 'development';
-  const corsConfigured =
-    config.get<string[]>('app.corsAllowedOrigins', { infer: true }) ?? [];
+  const corsConfigured = configStringArray(config, 'app.corsAllowedOrigins');
   const allowedOrigins = resolveCorsAllowedOrigins(nodeEnv, corsConfigured);
 
+  const originAllowlist: CustomOrigin = (origin, callback) => {
+    if (origin === undefined || origin === '') {
+      callback(null, true);
+      return;
+    }
+    callback(null, allowedOrigins.includes(origin));
+  };
+
   app.enableCors({
-    origin: (origin, callback) => {
-      if (origin === undefined || origin === '') {
-        callback(null, true);
-        return;
-      }
-      callback(null, allowedOrigins.includes(origin));
-    },
+    origin: originAllowlist,
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
