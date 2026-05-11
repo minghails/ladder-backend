@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { MARKET_CHART_RANGES } from '../market-metadata.config';
 
 export class MarketNetworkDto {
   @ApiProperty({ description: 'Chain ID. Current FE-ready MVP uses Base Sepolia.', example: 84532 })
@@ -381,7 +382,7 @@ export class MarketChartResponseDto {
   @ApiProperty({ description: 'Requested chart metric.', example: 'yield' })
   metric!: string;
 
-  @ApiProperty({ description: 'Requested chart range.', example: '30d' })
+  @ApiProperty({ description: 'Requested chart range.', enum: MARKET_CHART_RANGES, example: '30d' })
   range!: string;
 
   @ApiProperty({ description: 'Metric-specific headline metadata.', type: ChartHeadlineDto })

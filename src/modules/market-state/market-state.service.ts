@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
@@ -22,6 +22,7 @@ import { MarketFactsheetService } from './market-factsheet.service';
 import {
   BASE_SEPOLIA_MARKET_NETWORK,
   MARKET_CHART_CONFIG,
+  MARKET_CHART_RANGES,
   type MarketChartMetric,
   type MarketChartRange,
   MARKET_SETTLEMENT_LABELS,
@@ -384,26 +385,27 @@ export class MarketStateService {
     };
   }
 
-  async getChart(address: string, metric: MarketChartMetric, range: MarketChartRange = '30d') {
+  async getChart(address: string, metric: MarketChartMetric, range: string = '30d') {
+    const normalizedRange = normalizeChartRange(range);
     const live = await this.getLiveMarket(address);
     const chartConfig = MARKET_CHART_CONFIG[metric];
     const snapshots = await this.readSnapshotRows(live.address);
     const chronological = [...snapshots].reverse();
-    const rangedChronological = snapshotsInRange(chronological);
+    const rangedChronological = snapshotsInRange(chronological, normalizedRange);
 
     if (metric === 'yield') {
       const apySnapshots = chronological.map(toMarketApySnapshot);
       const rollingSeries = calculateRollingApySeries(apySnapshots);
-      return indexedYieldChart(live.address, range, chartConfig, apySeriesInRange(rollingSeries, chronological));
+      return indexedYieldChart(live.address, normalizedRange, chartConfig, apySeriesInRange(rollingSeries, chronological, normalizedRange));
     }
 
     if (metric === 'utilization') {
-      return indexedSnapshotChart(live.address, metric, range, chartConfig, rangedChronological, (snapshot) =>
+      return indexedSnapshotChart(live.address, metric, normalizedRange, chartConfig, rangedChronological, (snapshot) =>
         utilizationValue(snapshot.jtStRatio, snapshot.maxStJtRatio),
       );
     }
 
-    return indexedSnapshotChart(live.address, metric, range, chartConfig, rangedChronological, (snapshot) => chartValue(snapshot, metric));
+    return indexedSnapshotChart(live.address, metric, normalizedRange, chartConfig, rangedChronological, (snapshot) => chartValue(snapshot, metric));
   }
 
   async getHistory(
@@ -484,6 +486,20 @@ function normalizeCursor(value: number | undefined): number {
   return Math.max(Math.trunc(value), 0);
 }
 
+function normalizeChartRange(value: string | undefined): MarketChartRange {
+  const normalized = (value ?? '30d').toLowerCase();
+  if ((MARKET_CHART_RANGES as readonly string[]).includes(normalized)) {
+    return normalized as MarketChartRange;
+  }
+  throw new BadRequestException({
+    error: {
+      code: 'INVALID_CHART_RANGE',
+      message: 'Unsupported chart range',
+      details: { range: value, supported: MARKET_CHART_RANGES },
+    },
+  });
+}
+
 function toHistoryItem(row: typeof marketSnapshots.$inferSelect): MarketHistoryItemDto {
   return {
     blockNumber: row.blockNumber,
@@ -535,7 +551,20 @@ function chartValue(
   return snapshot.jtStRatio;
 }
 
-function snapshotsInRange(snapshots: Array<typeof marketSnapshots.$inferSelect>): Array<typeof marketSnapshots.$inferSelect> {
+function chartRangeDays(range: MarketChartRange): number {
+  switch (range) {
+    case '7d':
+      return 7;
+    case '90d':
+      return 90;
+    case '1y':
+      return 365;
+    case '30d':
+      return 30;
+  }
+}
+
+function snapshotsInRange(snapshots: Array<typeof marketSnapshots.$inferSelect>, range: MarketChartRange): Array<typeof marketSnapshots.$inferSelect> {
   if (snapshots.length === 0) {
     return snapshots;
   }
@@ -545,13 +574,14 @@ function snapshotsInRange(snapshots: Array<typeof marketSnapshots.$inferSelect>)
     return snapshots;
   }
 
-  const earliestIncludedMs = latest.snapshotAt.getTime() - 30 * 24 * 60 * 60 * 1000;
+  const earliestIncludedMs = latest.snapshotAt.getTime() - chartRangeDays(range) * 24 * 60 * 60 * 1000;
   return snapshots.filter((snapshot) => snapshot.snapshotAt.getTime() >= earliestIncludedMs);
 }
 
 function apySeriesInRange(
   series: MarketApySeriesPoint[],
   snapshots: Array<typeof marketSnapshots.$inferSelect>,
+  range: MarketChartRange,
 ): MarketApySeriesPoint[] {
   if (snapshots.length === 0) {
     return series;
@@ -562,7 +592,7 @@ function apySeriesInRange(
     return series;
   }
 
-  const earliestIncludedMs = latest.snapshotAt.getTime() - 30 * 24 * 60 * 60 * 1000;
+  const earliestIncludedMs = latest.snapshotAt.getTime() - chartRangeDays(range) * 24 * 60 * 60 * 1000;
   return series.filter((point) => new Date(point.timestamp).getTime() >= earliestIncludedMs);
 }
 

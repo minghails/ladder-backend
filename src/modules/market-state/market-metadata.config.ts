@@ -16,7 +16,8 @@ export const MARKET_FACTSHEET_CONFIG_ROWS = [
 ] as const;
 
 export type MarketChartMetric = 'yield' | 'tokenPrice' | 'tvl' | 'utilization' | 'ratio';
-export type MarketChartRange = '30d';
+export const MARKET_CHART_RANGES = ['7d', '30d', '90d', '1y'] as const;
+export type MarketChartRange = (typeof MARKET_CHART_RANGES)[number];
 
 export const MARKET_CHART_CONFIG: Record<
   MarketChartMetric,

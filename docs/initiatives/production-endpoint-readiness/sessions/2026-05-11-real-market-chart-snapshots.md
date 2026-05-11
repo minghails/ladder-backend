@@ -14,7 +14,7 @@ Implement follow-up chart requirement: replace remaining unavailable/mock-like p
   - `utilization` derives from snapshot `currentStJtRatio / maxStJtRatio`.
   - `ratio` uses snapshot semantic ST/JT ratio.
 - Added `dataQuality.sources.charts` and set chart/series source labels to `indexed_snapshots` when real rows exist.
-- Enforced `range=30d`; yield computes from full adjacent windows first, then filters points into range.
+- Added `range=7d|30d|90d|1y`; omitted range defaults to `30d`, UI label casing is normalized, and unsupported ranges return `INVALID_CHART_RANGE`. Yield computes from full adjacent windows first, then filters points into range.
 - Empty snapshot history now returns empty series with unavailable source labels instead of implying indexed availability.
 - Removed remaining production Swagger/controller wording that referenced deterministic mock chart history.
 - Added `market_snapshots.max_st_jt_ratio`, generated migration `0007_cultured_living_lightning.sql`, and updated `MarketSnapshotProjector` to carry `MaxStJtRatioUpdated` events into later snapshots.

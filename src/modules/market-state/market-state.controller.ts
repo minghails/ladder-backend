@@ -11,7 +11,8 @@ import {
   MarketPriceStatusResponseDto,
   MarketTradeConstraintsResponseDto,
 } from './dto/market-swagger.dto';
-import type { MarketChartMetric, MarketChartRange } from './market-metadata.config';
+import { MARKET_CHART_RANGES } from './market-metadata.config';
+import type { MarketChartMetric } from './market-metadata.config';
 import { MarketStateService } from './market-state.service';
 
 @ApiTags('Markets')
@@ -74,13 +75,13 @@ export class MarketStateController {
   @ApiOperation({ summary: 'Get market chart payload', description: 'Returns FE-stable chart payloads from indexed snapshots with explicit unavailable states when history is empty.' })
   @ApiParam({ name: 'address', description: 'Market contract/read-model address. Matching is case-insensitive.' })
   @ApiQuery({ name: 'metric', enum: ['yield', 'tokenPrice', 'tvl', 'utilization', 'ratio'], required: true })
-  @ApiQuery({ name: 'range', enum: ['30d'], required: false })
+  @ApiQuery({ name: 'range', enum: MARKET_CHART_RANGES, required: false })
   @ApiOkResponse({ description: 'Chart headline and series data.', type: MarketChartResponseDto })
   @ApiNotFoundResponse({ description: 'Market not found.', type: ErrorResponseDto })
   getChart(
     @Param('address') address: string,
     @Query('metric') metric: MarketChartMetric,
-    @Query('range') range: MarketChartRange = '30d',
+    @Query('range') range = '30d',
   ) {
     return this.marketState.getChart(address, metric, range);
   }

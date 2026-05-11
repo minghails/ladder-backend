@@ -617,7 +617,12 @@ describe('MarketStateService', () => {
     expect(chart.dataQuality.sources.charts).toBe('indexed_snapshots');
   });
 
-  it('limits chart snapshots to the requested 30 day range', async () => {
+  it.each([
+    ['7d', ['2026-05-24T00:00:00.000Z', '2026-05-31T00:00:00.000Z']],
+    ['30d', ['2026-05-01T00:00:00.000Z', '2026-05-24T00:00:00.000Z', '2026-05-31T00:00:00.000Z']],
+    ['90d', ['2026-03-02T00:00:00.000Z', '2026-05-01T00:00:00.000Z', '2026-05-24T00:00:00.000Z', '2026-05-31T00:00:00.000Z']],
+    ['1y', ['2025-05-31T00:00:00.000Z', '2026-03-02T00:00:00.000Z', '2026-05-01T00:00:00.000Z', '2026-05-24T00:00:00.000Z', '2026-05-31T00:00:00.000Z']],
+  ] as const)('limits chart snapshots to the requested %s range', async (range, expectedTimestamps) => {
     const { service } = await createService(LIVE_MARKET, [
       snapshotRow({
         blockNumber: '100',
@@ -630,29 +635,87 @@ describe('MarketStateService', () => {
         blockNumber: '99',
         sourceLogIndex: '1',
         nav: '9',
-        snapshotAt: new Date('2026-05-01T00:00:00.000Z'),
+        snapshotAt: new Date('2026-05-24T00:00:00.000Z'),
       }),
       snapshotRow({
         id: 3,
         blockNumber: '98',
         sourceLogIndex: '1',
         nav: '8',
-        snapshotAt: new Date('2026-04-30T23:59:59.000Z'),
+        snapshotAt: new Date('2026-05-01T00:00:00.000Z'),
+      }),
+      snapshotRow({
+        id: 4,
+        blockNumber: '97',
+        sourceLogIndex: '1',
+        nav: '7',
+        snapshotAt: new Date('2026-03-02T00:00:00.000Z'),
+      }),
+      snapshotRow({
+        id: 5,
+        blockNumber: '96',
+        sourceLogIndex: '1',
+        nav: '6',
+        snapshotAt: new Date('2025-05-31T00:00:00.000Z'),
+      }),
+      snapshotRow({
+        id: 6,
+        blockNumber: '95',
+        sourceLogIndex: '1',
+        nav: '5',
+        snapshotAt: new Date('2025-05-30T23:59:59.000Z'),
       }),
     ]);
 
-    const chart = await service.getChart(LIVE_MARKET.address, 'tvl', '30d');
+    const chart = await service.getChart(LIVE_MARKET.address, 'tvl', range);
 
-    expect(chart.series).toEqual([
-      expect.objectContaining({
-        timestamp: '2026-05-01T00:00:00.000Z',
-        value: '9',
+    expect(chart.range).toBe(range);
+    expect(chart.series.map((point) => point.timestamp)).toEqual(expectedTimestamps);
+  });
+
+  it('accepts uppercase chart range labels from FE controls', async () => {
+    const { service } = await createService(LIVE_MARKET, [
+      snapshotRow({
+        blockNumber: '100',
+        sourceLogIndex: '1',
+        nav: '10',
+        snapshotAt: new Date('2026-05-31T00:00:00.000Z'),
       }),
-      expect.objectContaining({
-        timestamp: '2026-05-31T00:00:00.000Z',
-        value: '10',
+      snapshotRow({
+        id: 2,
+        blockNumber: '99',
+        sourceLogIndex: '1',
+        nav: '9',
+        snapshotAt: new Date('2026-05-24T00:00:00.000Z'),
+      }),
+      snapshotRow({
+        id: 3,
+        blockNumber: '98',
+        sourceLogIndex: '1',
+        nav: '8',
+        snapshotAt: new Date('2026-05-23T23:59:59.000Z'),
       }),
     ]);
+
+    const chart = await service.getChart(LIVE_MARKET.address, 'tvl', '7D');
+
+    expect(chart.range).toBe('7d');
+    expect(chart.series.map((point) => point.timestamp)).toEqual([
+      '2026-05-24T00:00:00.000Z',
+      '2026-05-31T00:00:00.000Z',
+    ]);
+  });
+
+  it('rejects unsupported chart ranges instead of returning misleading empty data', async () => {
+    const { service } = await createService(LIVE_MARKET, []);
+
+    await expect(service.getChart(LIVE_MARKET.address, 'tvl', '14d')).rejects.toMatchObject({
+      response: {
+        error: {
+          code: 'INVALID_CHART_RANGE',
+        },
+      },
+    });
   });
 
   it('returns empty indexed series instead of mock when indexed snapshots are missing', async () => {
