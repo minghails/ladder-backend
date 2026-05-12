@@ -6,6 +6,8 @@ import {
   type LivePortfolioPosition,
 } from '@shared/blockchain/contract-reader.service';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
+import { marketSnapshots } from '@shared/database/schema';
+import { MarketApyService } from '../market-state/market-apy.service';
 import { PortfolioActivityRepository } from './portfolio-activity.repository';
 import { PortfolioClaimablesRepository, type PortfolioClaimableDto } from './portfolio-claimables.repository';
 import { PortfolioEarningsRepository, type PortfolioCashflowDto, type PortfolioCostBasisDto } from './portfolio-earnings.repository';
@@ -150,6 +152,32 @@ describe('PortfolioService', () => {
     }
   }
 
+  function snapshotRow(overrides: Partial<typeof marketSnapshots.$inferSelect> = {}) {
+    return {
+      id: 1,
+      chainId: 84532,
+      marketAddress: LIVE_MARKET.address.toLowerCase(),
+      nav: '10',
+      navSt: '6',
+      navJt: '4',
+      jtStRatio: '1500000000000000000',
+      maxStJtRatio: '6000000000000000000',
+      ytPrice: '1000000000000000000',
+      stSharePrice: '1000000000000000000',
+      jtSharePrice: '1000000000000000000',
+      halted: 'false',
+      blockNumber: '100',
+      blockHash:
+        '0x0000000000000000000000000000000000000000000000000000000000000100',
+      sourceTxHash:
+        '0x0000000000000000000000000000000000000000000000000000000000000200',
+      sourceLogIndex: '7',
+      snapshotAt: new Date('2026-05-04T00:00:00.000Z'),
+      createdAt: new Date('2026-05-04T00:00:00.000Z'),
+      ...overrides,
+    };
+  }
+
   async function createService({
     fakeDb,
     positions = LIVE_POSITIONS,
@@ -158,6 +186,7 @@ describe('PortfolioService', () => {
     claimables = [],
     costBasisRows = [],
     cashflowRows = [],
+    snapshots = [],
   }: {
     fakeDb?: FakeDb;
     positions?: LivePortfolioPosition[];
@@ -166,6 +195,7 @@ describe('PortfolioService', () => {
     claimables?: PortfolioClaimableDto[];
     costBasisRows?: PortfolioCostBasisDto[];
     cashflowRows?: PortfolioCashflowDto[];
+    snapshots?: Array<typeof marketSnapshots.$inferSelect>;
   } = {}) {
     const contractReader = {
       getPortfolioPositions: vi.fn().mockResolvedValue(positions),
@@ -201,9 +231,10 @@ describe('PortfolioService', () => {
           provide: PortfolioClaimablesRepository,
           useValue: claimablesRepository,
         },
+        MarketApyService,
         {
           provide: DRIZZLE_DB,
-          useValue: fakeDb,
+          useValue: fakeDb ?? { query: { marketSnapshots: { findMany: vi.fn().mockResolvedValue(snapshots) } }, depositRequestRows: [] },
         },
       ],
     }).compile();
@@ -247,7 +278,7 @@ describe('PortfolioService', () => {
         currentApy: '0',
         allocationPercent: '0.666666666666666666',
         source: 'live',
-        apySource: 'placeholder',
+        apySource: 'unavailable',
       },
       {
         marketAddress: LIVE_MARKET.address,
@@ -260,7 +291,7 @@ describe('PortfolioService', () => {
         currentApy: '0',
         allocationPercent: '0.333333333333333333',
         source: 'live',
-        apySource: 'placeholder',
+        apySource: 'unavailable',
       },
     ]);
     expect(portfolio.portfolioMetrics).toEqual({
@@ -286,6 +317,45 @@ describe('PortfolioService', () => {
       },
     });
     expect(portfolio.links.earnings).toContain('/portfolio/0xabcdef0000000000000000000000000000000001/earnings');
+  });
+
+  it('uses indexed market APY snapshots for portfolio positions', async () => {
+    const { service } = await createService({
+      snapshots: [
+        snapshotRow({
+          id: 1,
+          blockNumber: '100',
+          stSharePrice: '1000000000000000000',
+          jtSharePrice: '1000000000000000000',
+          snapshotAt: new Date('2026-04-01T00:00:00.000Z'),
+        }),
+        snapshotRow({
+          id: 2,
+          blockNumber: '200',
+          stSharePrice: '1010000000000000000',
+          jtSharePrice: '1030000000000000000',
+          snapshotAt: new Date('2026-04-11T00:00:00.000Z'),
+        }),
+      ],
+    });
+
+    const portfolio = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001');
+
+    expect(portfolio.positions).toEqual([
+      expect.objectContaining({ assetType: 'senior', currentApy: '0.365', apySource: 'indexed_snapshots' }),
+      expect.objectContaining({ assetType: 'junior', currentApy: '1.095', apySource: 'indexed_snapshots' }),
+    ]);
+  });
+
+  it('marks portfolio position APY unavailable when fewer than two snapshots exist', async () => {
+    const { service } = await createService({ snapshots: [snapshotRow()] });
+
+    const portfolio = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001');
+
+    expect(portfolio.positions).toEqual([
+      expect.objectContaining({ assetType: 'senior', currentApy: '0', apySource: 'unavailable' }),
+      expect.objectContaining({ assetType: 'junior', currentApy: '0', apySource: 'unavailable' }),
+    ]);
   });
 
   it('uses live earnings projection in portfolio overview summary', async () => {

@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
+import { ContractReaderService, type LiveMarketState, type LivePortfolioPosition } from '@shared/blockchain/contract-reader.service';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { MarketApyService } from '../modules/market-state/market-apy.service';
 import { MarketFactsheetService } from '../modules/market-state/market-factsheet.service';
@@ -37,7 +37,19 @@ const LIVE_MARKET: LiveMarketState = {
 };
 
 const WALLET = '0xabcdef0000000000000000000000000000000001';
-const FORBIDDEN_VALUES = new Set(['mock', 'activity-1', 'activity-2', 'request-1', 'claim-1', 'reward-1']);
+const LIVE_POSITIONS: LivePortfolioPosition[] = [
+  {
+    marketAddress: LIVE_MARKET.address,
+    marketSymbol: 'mEDGE',
+    assetType: 'senior',
+    assetSymbol: 'st-mEDGE',
+    tokenAddress: LIVE_MARKET.seniorTrancheAddress,
+    shares: '100000000000000000000',
+    assets: '100000000000000000000',
+    value: '100000000000000000000',
+  },
+];
+const FORBIDDEN_VALUES = new Set(['mock', 'placeholder', 'activity-1', 'activity-2', 'request-1', 'claim-1', 'reward-1']);
 
 function walk(value: unknown, visit: (value: unknown) => void): void {
   visit(value);
@@ -81,7 +93,7 @@ describe('production endpoint readiness audit', () => {
     const contractReader = {
       getMarketState: vi.fn().mockResolvedValue(LIVE_MARKET),
       getTokenMetadata: vi.fn().mockResolvedValue({ address: LIVE_MARKET.baseTokenAddress, symbol: 'USDC', decimals: 6 }),
-      getPortfolioPositions: vi.fn().mockResolvedValue([]),
+      getPortfolioPositions: vi.fn().mockResolvedValue(LIVE_POSITIONS),
     };
     const quoteSimulation = {
       simulateDepositBaseInstant: vi.fn().mockResolvedValue({ ok: true, ytOut: '998000000000000000', sharesOut: '998000000000000000' }),

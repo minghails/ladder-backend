@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-const DATA_SOURCE_VALUES = ['live', 'db', 'mock', 'placeholder', 'unavailable', 'derived'] as const;
+const DATA_SOURCE_VALUES = ['live', 'db', 'mock', 'placeholder', 'unavailable', 'derived', 'indexed_events', 'partial_indexed_events', 'indexed_snapshots'] as const;
+const PORTFOLIO_APY_SOURCE_VALUES = ['indexed_snapshots', 'unavailable'] as const;
 
 export class PortfolioValueChangeDto {
   @ApiProperty({ description: 'Absolute value change as a string.', example: '4230400000000000000' })
@@ -69,7 +70,7 @@ export class PortfolioPositionDto {
   @ApiProperty({ description: 'Position value in raw token precision as a string, computed as assets * latestYtPrice / 1e18.', example: '100000000000000000000' })
   value!: string;
 
-  @ApiProperty({ description: 'Current APY decimal string. Placeholder 0 until APY calculation is implemented.', example: '0' })
+  @ApiProperty({ description: 'Current APY decimal string from indexed market share-price snapshots, or 0 when unavailable.', example: '0.365' })
   currentApy!: string;
 
   @ApiProperty({ description: 'Portfolio allocation as a decimal string. Example 0.15 means 15%.', example: '0.15' })
@@ -78,7 +79,7 @@ export class PortfolioPositionDto {
   @ApiProperty({ description: 'Position balance/value source.', enum: DATA_SOURCE_VALUES, example: 'live' })
   source!: string;
 
-  @ApiProperty({ description: 'APY source.', enum: DATA_SOURCE_VALUES, example: 'placeholder' })
+  @ApiProperty({ description: 'APY source.', enum: PORTFOLIO_APY_SOURCE_VALUES, example: 'indexed_snapshots' })
   apySource!: string;
 }
 

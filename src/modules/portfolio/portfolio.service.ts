@@ -2,12 +2,13 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { desc, or, eq } from 'drizzle-orm';
 import { ContractReaderService, type LivePortfolioPosition } from '@shared/blockchain/contract-reader.service';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
-import { depositRequests } from '@shared/database/schema';
+import { depositRequests, marketSnapshots } from '@shared/database/schema';
+import { MarketApyService, type MarketApyResult, type MarketApySnapshot } from '../market-state/market-apy.service';
 import { PortfolioActivityRepository } from './portfolio-activity.repository';
 import { PortfolioClaimablesRepository } from './portfolio-claimables.repository';
 import { PortfolioEarningsRepository, type PortfolioCashflowDto, type PortfolioCostBasisDto } from './portfolio-earnings.repository';
 
-export type PortfolioDataSource = 'live' | 'db' | 'mock' | 'placeholder' | 'unavailable' | 'derived' | 'indexed_events' | 'partial_indexed_events';
+export type PortfolioDataSource = 'live' | 'db' | 'mock' | 'placeholder' | 'unavailable' | 'derived' | 'indexed_events' | 'partial_indexed_events' | 'indexed_snapshots';
 export type PortfolioRequestStatus = 'pending' | 'settled' | 'rejected' | 'refunded';
 export type PortfolioTransactionStatus = 'success' | 'pending' | 'failed' | 'rejected';
 export type PortfolioTransactionType =
@@ -236,11 +237,19 @@ type PortfolioReadDatabase = {
   select(): DrizzleQueryBuilder;
 };
 
+type PortfolioSnapshotDatabase = {
+  query: {
+    marketSnapshots: {
+      findMany: (config: unknown) => Promise<Array<typeof marketSnapshots.$inferSelect>>;
+    };
+  };
+};
+
 type FixtureReadDatabase = {
   depositRequestRows: DepositRequestRow[];
 };
 
-type PortfolioDatabase = PortfolioReadDatabase | FixtureReadDatabase;
+type PortfolioDatabase = PortfolioReadDatabase | FixtureReadDatabase | PortfolioSnapshotDatabase | (FixtureReadDatabase & PortfolioSnapshotDatabase);
 
 const SCALE = 10n ** 18n;
 const DEFAULT_LIMIT = 20;
@@ -259,6 +268,10 @@ function isFixtureReadDatabase(db: PortfolioDatabase | undefined): db is Fixture
 
 function isPortfolioReadDatabase(db: PortfolioDatabase | undefined): db is PortfolioReadDatabase {
   return Boolean(db && 'select' in db && typeof db.select === 'function');
+}
+
+function hasSnapshotQuery(db: PortfolioDatabase | undefined): db is PortfolioSnapshotDatabase {
+  return Boolean(db && 'query' in db && db.query.marketSnapshots.findMany);
 }
 
 function clampLimit(limit?: number): number {
@@ -361,7 +374,9 @@ function allocationPercent(value: string, totalValue: bigint): string {
   return `${integer.toString()}.${fraction.toString().padStart(18, '0').replace(/0+$/, '')}`;
 }
 
-function toPortfolioPositionDto(position: LivePortfolioPosition, totalValue: bigint): PortfolioPositionDto {
+function toPortfolioPositionDto(position: LivePortfolioPosition, totalValue: bigint, apy: MarketApyResult): PortfolioPositionDto {
+  const positionApy = position.assetType === 'senior' ? apy.senior : apy.junior;
+
   return {
     marketAddress: position.marketAddress,
     marketSymbol: position.marketSymbol,
@@ -370,10 +385,35 @@ function toPortfolioPositionDto(position: LivePortfolioPosition, totalValue: big
     tokenAddress: position.tokenAddress,
     amount: position.assets,
     value: position.value,
-    currentApy: '0',
+    currentApy: positionApy.apy,
     allocationPercent: allocationPercent(position.value, totalValue),
     source: 'live',
-    apySource: 'placeholder',
+    apySource: positionApy.source,
+  };
+}
+
+function compareSnapshotsDesc(
+  left: typeof marketSnapshots.$inferSelect,
+  right: typeof marketSnapshots.$inferSelect,
+): number {
+  const leftBlock = BigInt(left.blockNumber);
+  const rightBlock = BigInt(right.blockNumber);
+  if (leftBlock !== rightBlock) {
+    return leftBlock > rightBlock ? -1 : 1;
+  }
+  const leftLog = BigInt(left.sourceLogIndex);
+  const rightLog = BigInt(right.sourceLogIndex);
+  if (leftLog === rightLog) {
+    return 0;
+  }
+  return leftLog > rightLog ? -1 : 1;
+}
+
+function toMarketApySnapshot(snapshot: typeof marketSnapshots.$inferSelect): MarketApySnapshot {
+  return {
+    stSharePrice: snapshot.stSharePrice,
+    jtSharePrice: snapshot.jtSharePrice,
+    snapshotAt: snapshot.snapshotAt,
   };
 }
 
@@ -583,6 +623,7 @@ export class PortfolioService {
     private readonly activityRepository: PortfolioActivityRepository,
     private readonly earningsRepository: PortfolioEarningsRepository,
     private readonly claimablesRepository: PortfolioClaimablesRepository,
+    private readonly apyService: MarketApyService,
     @Optional()
     @Inject(DRIZZLE_DB)
     private readonly db?: PortfolioDatabase,
@@ -597,6 +638,7 @@ export class PortfolioService {
       this.readRequests(normalizedAddress),
       this.earningsRepository.findCostBasis(normalizedAddress),
     ]);
+    const apy = await this.marketApy(liveMarket.address);
     const marketSymbol = stripTranchePrefix(liveMarket.seniorSymbol);
     const [indexedActivities, liveClaimables] = await Promise.all([
       this.activityRepository.findByWallet(normalizedAddress, marketSymbol),
@@ -627,7 +669,7 @@ export class PortfolioService {
           source: claimableSummary.source,
         },
       },
-      positions: livePositions.map((position) => toPortfolioPositionDto(position, totalValue)),
+      positions: livePositions.map((position) => toPortfolioPositionDto(position, totalValue, apy)),
       portfolioMetrics: {
         totalValue: totalValue.toString(),
         netApy: '0',
@@ -639,6 +681,23 @@ export class PortfolioService {
       dataQuality: dataQuality(false, recentActivitiesSource, earningsSummary.currentEarningSource, 'unavailable', claimableSummary.source),
       links: links(normalizedAddress),
     };
+  }
+
+  private async marketApy(address: string): Promise<MarketApyResult> {
+    const snapshots = await this.readSnapshotRows(address);
+    return this.apyService.calculate(snapshots.map(toMarketApySnapshot));
+  }
+
+  private async readSnapshotRows(marketAddress: string): Promise<Array<typeof marketSnapshots.$inferSelect>> {
+    if (!hasSnapshotQuery(this.db)) {
+      return [];
+    }
+
+    const rows = await this.db.query.marketSnapshots.findMany({
+      where: eq(marketSnapshots.marketAddress, normalizeAddress(marketAddress)),
+    });
+
+    return rows.sort(compareSnapshotsDesc);
   }
 
   async getRequests(address: string, options?: PortfolioListOptions): Promise<PortfolioRequestsResponseDto> {
