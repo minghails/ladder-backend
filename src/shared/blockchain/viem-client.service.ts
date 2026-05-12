@@ -6,12 +6,16 @@ import { createPublicClient, http, type PublicClient, type Address } from 'viem'
 export class ViemClientService {
   private readonly publicClient: PublicClient;
   private readonly marketAddress: Address;
+  private readonly baseTokenAddress: Address;
   private readonly chainId: number;
 
   constructor(private readonly config: ConfigService) {
     const rpcUrl = this.config.getOrThrow<string>('blockchain.rpcUrl');
     this.marketAddress = this.config.getOrThrow<string>(
       'blockchain.marketAddress',
+    ) as Address;
+    this.baseTokenAddress = this.config.getOrThrow<string>(
+      'blockchain.baseTokenAddress',
     ) as Address;
     this.chainId = this.config.getOrThrow<number>('projector.chainId');
 
@@ -26,6 +30,10 @@ export class ViemClientService {
 
   getMarketAddress(): Address {
     return this.marketAddress;
+  }
+
+  getBaseTokenAddress(): Address {
+    return this.baseTokenAddress;
   }
 
   getChainId(): number {

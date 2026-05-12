@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+const ethereumAddress = z
+  .string()
+  .regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address');
+
 /** Comma-separated origins from `CORS_ALLOWED_ORIGINS`; each entry must be a valid URL. */
 export function parseCorsAllowedOrigins(raw: string | undefined): string[] {
   const parts = (raw ?? '')
@@ -17,9 +21,12 @@ const envSchema = z
     PORT: z.coerce.number().int().positive().default(3000),
     DATABASE_URL: z.url(),
     RPC_URL: z.url(),
-    MARKET_ADDRESS: z
-      .string()
-      .regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address'),
+    MARKET_ADDRESS: ethereumAddress,
+    BASE_TOKEN_ADDRESS: ethereumAddress.optional(),
+    MTOKEN_ADDRESS: ethereumAddress.optional(),
+    MIDAS_PRICE_ORACLE_ADDRESS: ethereumAddress.optional(),
+    MIDAS_ISSUANCE_VAULT_ADDRESS: ethereumAddress.optional(),
+    MIDAS_REDEMPTION_VAULT_ADDRESS: ethereumAddress.optional(),
     PUBLIC_API_URL: z.url().optional(),
     CORS_ALLOWED_ORIGINS: z.string().optional(),
     CHAIN_ID: z.coerce.number().int().positive().default(84532),
@@ -67,6 +74,22 @@ const envSchema = z
           'CORS_ALLOWED_ORIGINS must include at least one URL when NODE_ENV is production',
         path: ['CORS_ALLOWED_ORIGINS'],
       });
+    }
+
+    for (const key of [
+      'BASE_TOKEN_ADDRESS',
+      'MTOKEN_ADDRESS',
+      'MIDAS_PRICE_ORACLE_ADDRESS',
+      'MIDAS_ISSUANCE_VAULT_ADDRESS',
+      'MIDAS_REDEMPTION_VAULT_ADDRESS',
+    ] as const) {
+      if (config.CHAIN_ID !== 84532 && config[key] === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${key} is required when NODE_ENV is production`,
+          path: [key],
+        });
+      }
     }
   })
   .refine(

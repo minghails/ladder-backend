@@ -8,6 +8,19 @@ import {
   MARKET_ABI,
 } from '../../src/shared/blockchain/contracts';
 import { ViemClientService } from '../../src/shared/blockchain/viem-client.service';
+import { MOCK_USDC_ABI, MOCK_USDC_ADDRESS } from '../../src/shared/blockchain/contracts/mock-usdc.abi';
+import { MOCK_MTOKEN_ABI, MOCK_MTOKEN_ADDRESS } from '../../src/shared/blockchain/contracts/mock-mtoken.abi';
+import { MOCK_MIDAS_PRICE_ORACLE_ABI, MOCK_MIDAS_PRICE_ORACLE_ADDRESS } from '../../src/shared/blockchain/contracts/mock-midas-price-oracle.abi';
+import { MOCK_MIDAS_ISSUANCE_VAULT_ABI, MOCK_MIDAS_ISSUANCE_VAULT_ADDRESS } from '../../src/shared/blockchain/contracts/mock-midas-issuance-vault.abi';
+import { MOCK_MIDAS_REDEMPTION_VAULT_ABI, MOCK_MIDAS_REDEMPTION_VAULT_ADDRESS } from '../../src/shared/blockchain/contracts/mock-midas-redemption-vault.abi';
+
+const BASE_SEPOLIA_MOCK_CONTRACTS = {
+  mockUSDC: { address: MOCK_USDC_ADDRESS, abi: MOCK_USDC_ABI },
+  mockMToken: { address: MOCK_MTOKEN_ADDRESS, abi: MOCK_MTOKEN_ABI },
+  mockMidasPriceOracle: { address: MOCK_MIDAS_PRICE_ORACLE_ADDRESS, abi: MOCK_MIDAS_PRICE_ORACLE_ABI },
+  mockMidasIssuanceVault: { address: MOCK_MIDAS_ISSUANCE_VAULT_ADDRESS, abi: MOCK_MIDAS_ISSUANCE_VAULT_ABI },
+  mockMidasRedemptionVault: { address: MOCK_MIDAS_REDEMPTION_VAULT_ADDRESS, abi: MOCK_MIDAS_REDEMPTION_VAULT_ABI },
+} as const;
 
 function chainRpcUrl(): string {
   return process.env['CHAIN_RPC_URL'] ?? process.env['BASE_SEPOLIA_RPC_URL'] ?? process.env['BLOCKCHAIN_RPC_URL'] ?? 'https://sepolia.base.org';
@@ -18,8 +31,9 @@ function contractReader(rpcUrl: string): ContractReaderService {
   const viem = {
     getPublicClient: () => publicClient,
     getMarketAddress: () => BASE_SEPOLIA_ADDRESSES.market as Address,
+    getBaseTokenAddress: () => MOCK_USDC_ADDRESS as Address,
     getChainId: () => BASE_SEPOLIA_CHAIN_ID,
-  } satisfies Pick<ViemClientService, 'getPublicClient' | 'getMarketAddress' | 'getChainId'>;
+  } satisfies Pick<ViemClientService, 'getPublicClient' | 'getMarketAddress' | 'getBaseTokenAddress' | 'getChainId'>;
 
   return new ContractReaderService(viem as ViemClientService);
 }
@@ -28,7 +42,7 @@ describe('Base Sepolia ABI chain smoke', () => {
   it('keeps deployed contract registry addresses valid for the configured chain', () => {
     expect(BASE_SEPOLIA_CHAIN_ID).toBe(84532);
 
-    for (const contract of Object.values(BASE_SEPOLIA_CONTRACTS)) {
+    for (const contract of [...Object.values(BASE_SEPOLIA_CONTRACTS), ...Object.values(BASE_SEPOLIA_MOCK_CONTRACTS)]) {
       expect(isAddress(contract.address)).toBe(true);
       expect(contract.abi.length).toBeGreaterThan(0);
     }
@@ -39,12 +53,12 @@ describe('Base Sepolia ABI chain smoke', () => {
 
     const [market, baseToken, sharePrices] = await Promise.all([
       reader.getMarketState(),
-      reader.getTokenMetadata(BASE_SEPOLIA_ADDRESSES.mockUSDC),
+      reader.getTokenMetadata(MOCK_USDC_ADDRESS),
       reader.getMarketTrancheSharePrices(),
     ]);
 
     expect(market.address).toBe(BASE_SEPOLIA_ADDRESSES.market);
-    expect(market.ytTokenAddress).toBe(BASE_SEPOLIA_ADDRESSES.mockMToken);
+    expect(market.ytTokenAddress).toBe(MOCK_MTOKEN_ADDRESS);
     expect(market.seniorTrancheAddress).toBe(BASE_SEPOLIA_ADDRESSES.stTranche);
     expect(market.juniorTrancheAddress).toBe(BASE_SEPOLIA_ADDRESSES.jtTranche);
     expect(market.seniorSymbol.length).toBeGreaterThan(0);

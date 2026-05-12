@@ -13,6 +13,7 @@ describe('ViemClientService', () => {
               blockchain: {
                 rpcUrl: 'http://localhost:8545',
                 marketAddress: '0x1234567890123456789012345678901234567890',
+                baseTokenAddress: '0x00000000000000000000000000000000000000a0',
               },
               projector: {
                 chainId: 84532,
@@ -38,6 +39,7 @@ describe('ViemClientService', () => {
               blockchain: {
                 rpcUrl: 'http://localhost:8545',
                 marketAddress: '0x1234567890123456789012345678901234567890',
+                baseTokenAddress: '0x00000000000000000000000000000000000000a0',
               },
               projector: {
                 chainId: 84532,

@@ -70,6 +70,38 @@ describe('ContractReaderService', () => {
     );
   });
 
+  it('uses configured base token address when reading live market state', async () => {
+    const baseTokenAddress = '0x00000000000000000000000000000000000000a0';
+    const readContract = vi.fn()
+      .mockResolvedValueOnce('0x0000000000000000000000000000000000000002')
+      .mockResolvedValueOnce('0x0000000000000000000000000000000000000003')
+      .mockResolvedValueOnce('0x0000000000000000000000000000000000000004')
+      .mockResolvedValueOnce('0x0000000000000000000000000000000000000005')
+      .mockResolvedValueOnce(100n)
+      .mockResolvedValueOnce(60n)
+      .mockResolvedValueOnce(40n)
+      .mockResolvedValueOnce(1500000000000000000n)
+      .mockResolvedValueOnce(6000000000000000000n)
+      .mockResolvedValueOnce(1000000000000000000n)
+      .mockResolvedValueOnce(123n)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce('stYT')
+      .mockResolvedValueOnce('jtYT')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false);
+    const service = new ContractReaderService({
+      getMarketAddress: () => '0x0000000000000000000000000000000000000001',
+      getBaseTokenAddress: () => baseTokenAddress,
+      getPublicClient: () => ({ readContract }),
+    } as never);
+
+    const result = await service.getMarketState();
+
+    expect(result.baseTokenAddress).toBe(baseTokenAddress);
+  });
+
   it('reads historical max ST/JT ratio at a specific block', async () => {
     const readContract = vi.fn().mockResolvedValue(6000000000000000000n);
     const service = new ContractReaderService({

@@ -7,7 +7,6 @@ import {
   MIDAS_ADAPTOR_ABI,
   ST_TRANCHE_ABI,
   JT_TRANCHE_ABI,
-  MOCK_USDC_ADDRESS,
 } from './contracts';
 
 export interface TrancheSharePrices {
@@ -217,7 +216,7 @@ export class ContractReaderService {
     return {
       address: marketAddress,
       ytTokenAddress: toStringValue(ytTokenAddress),
-      baseTokenAddress: MOCK_USDC_ADDRESS,
+      baseTokenAddress: this.viem.getBaseTokenAddress(),
       seniorTrancheAddress: stAddress,
       juniorTrancheAddress: jtAddress,
       seniorSymbol: toStringValue(seniorSymbol),

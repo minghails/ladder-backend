@@ -16,6 +16,40 @@ describe('validateEnv', () => {
     expect(result.NODE_ENV).toBe('development');
   });
 
+  it('should require production external contract addresses without defaults', () => {
+    expect(() =>
+      validateEnv({
+        NODE_ENV: 'production',
+        DATABASE_URL: 'postgresql://user:pass@localhost:5432/ladder_dev',
+        RPC_URL: 'http://localhost:8545',
+        MARKET_ADDRESS: '0x1234567890123456789012345678901234567890',
+        CHAIN_ID: '8453',
+        CORS_ALLOWED_ORIGINS: 'https://app.example.com',
+      }),
+    ).toThrow(/BASE_TOKEN_ADDRESS/);
+  });
+
+  it('should validate configured external contract addresses', () => {
+    const result = validateEnv({
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/ladder_dev',
+      RPC_URL: 'http://localhost:8545',
+      MARKET_ADDRESS: '0x1234567890123456789012345678901234567890',
+      BASE_TOKEN_ADDRESS: '0x00000000000000000000000000000000000000a0',
+      MTOKEN_ADDRESS: '0x00000000000000000000000000000000000000b0',
+      MIDAS_PRICE_ORACLE_ADDRESS: '0x00000000000000000000000000000000000000c0',
+      MIDAS_ISSUANCE_VAULT_ADDRESS: '0x00000000000000000000000000000000000000d0',
+      MIDAS_REDEMPTION_VAULT_ADDRESS: '0x00000000000000000000000000000000000000e0',
+      CORS_ALLOWED_ORIGINS: 'https://app.example.com',
+    });
+
+    expect(result.BASE_TOKEN_ADDRESS).toBe('0x00000000000000000000000000000000000000a0');
+    expect(result.MTOKEN_ADDRESS).toBe('0x00000000000000000000000000000000000000b0');
+    expect(result.MIDAS_PRICE_ORACLE_ADDRESS).toBe('0x00000000000000000000000000000000000000c0');
+    expect(result.MIDAS_ISSUANCE_VAULT_ADDRESS).toBe('0x00000000000000000000000000000000000000d0');
+    expect(result.MIDAS_REDEMPTION_VAULT_ADDRESS).toBe('0x00000000000000000000000000000000000000e0');
+  });
+
   it('should throw on missing required fields', () => {
     expect(() => validateEnv({})).toThrow();
   });
