@@ -1,6 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { desc, or, eq } from 'drizzle-orm';
 import { ContractReaderService, type LivePortfolioPosition } from '@shared/blockchain/contract-reader.service';
+import { marketDisplaySymbol } from '@shared/blockchain/token-display.config';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { depositRequests, marketSnapshots } from '@shared/database/schema';
 import { MarketApyService, type MarketApyResult, type MarketApySnapshot } from '../market-state/market-apy.service';
@@ -639,7 +640,7 @@ export class PortfolioService {
       this.earningsRepository.findCostBasis(normalizedAddress),
     ]);
     const apy = await this.marketApy(liveMarket.address);
-    const marketSymbol = stripTranchePrefix(liveMarket.seniorSymbol);
+    const marketSymbol = marketDisplaySymbol(liveMarket);
     const [indexedActivities, liveClaimables] = await Promise.all([
       this.activityRepository.findByWallet(normalizedAddress, marketSymbol),
       this.claimablesRepository.findByWallet(normalizedAddress, marketSymbol),
@@ -707,7 +708,7 @@ export class PortfolioService {
       this.readRequests(normalizedAddress),
     ]);
     const realRequests = requestRows.map((row) =>
-      toPortfolioRequestDto(row, liveMarket.address, stripTranchePrefix(liveMarket.seniorSymbol)),
+      toPortfolioRequestDto(row, liveMarket.address, marketDisplaySymbol(liveMarket)),
     );
     const page = paginate(realRequests, options);
 
@@ -743,7 +744,7 @@ export class PortfolioService {
   async getClaimables(address: string, options?: PortfolioListOptions): Promise<PortfolioClaimablesResponseDto> {
     const normalizedAddress = normalizeAddress(address);
     const liveMarket = await this.contractReader.getMarketState();
-    const marketSymbol = stripTranchePrefix(liveMarket.seniorSymbol);
+    const marketSymbol = marketDisplaySymbol(liveMarket);
     const liveClaimables = await this.claimablesRepository.findByWallet(normalizedAddress, marketSymbol);
     const page = paginate(liveClaimables, options);
 
@@ -758,7 +759,7 @@ export class PortfolioService {
   async getActivities(address: string, options?: PortfolioListOptions): Promise<PortfolioActivitiesResponseDto> {
     const normalizedAddress = normalizeAddress(address);
     const liveMarket = await this.contractReader.getMarketState();
-    const marketSymbol = stripTranchePrefix(liveMarket.seniorSymbol);
+    const marketSymbol = marketDisplaySymbol(liveMarket);
     const indexedActivities = await this.activityRepository.findByWallet(normalizedAddress, marketSymbol);
     const page = paginate(indexedActivities, options);
 

@@ -70,6 +70,52 @@ describe('ContractReaderService', () => {
     );
   });
 
+  it('uses mEDGE as portfolio market display symbol for the production YT address', async () => {
+    const readContract = vi.fn()
+      .mockResolvedValueOnce('0x7060176d148D07834050473C8a9123244c0B44CD')
+      .mockResolvedValueOnce('0x0000000000000000000000000000000000000005')
+      .mockResolvedValueOnce('0x0000000000000000000000000000000000000006')
+      .mockResolvedValueOnce('0x0000000000000000000000000000000000000007')
+      .mockResolvedValueOnce(100n)
+      .mockResolvedValueOnce(60n)
+      .mockResolvedValueOnce(40n)
+      .mockResolvedValueOnce(1500000000000000000n)
+      .mockResolvedValueOnce(6000000000000000000n)
+      .mockResolvedValueOnce(1000000000000000000n)
+      .mockResolvedValueOnce(123n)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce('LST')
+      .mockResolvedValueOnce('LJT')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(2n)
+      .mockResolvedValueOnce(3n)
+      .mockResolvedValueOnce(2n)
+      .mockResolvedValueOnce(3n);
+    const service = new ContractReaderService({
+      getMarketAddress: () => '0x0000000000000000000000000000000000000001',
+      getBaseTokenAddress: () => '0x00000000000000000000000000000000000000a0',
+      getPublicClient: () => ({ readContract }),
+    } as never);
+
+    const positions = await service.getPortfolioPositions('0x0000000000000000000000000000000000000004');
+
+    expect(positions).toEqual([
+      expect.objectContaining({
+        marketSymbol: 'mEDGE',
+        assetType: 'senior',
+        assetSymbol: 'LST',
+      }),
+      expect.objectContaining({
+        marketSymbol: 'mEDGE',
+        assetType: 'junior',
+        assetSymbol: 'LJT',
+      }),
+    ]);
+  });
+
   it('uses configured base token address when reading live market state', async () => {
     const baseTokenAddress = '0x00000000000000000000000000000000000000a0';
     const readContract = vi.fn()

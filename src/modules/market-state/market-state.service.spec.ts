@@ -33,6 +33,13 @@ const LIVE_MARKET: LiveMarketState = {
   },
 };
 
+const PRODUCTION_LIKE_MARKET: LiveMarketState = {
+  ...LIVE_MARKET,
+  ytTokenAddress: '0x7060176d148D07834050473C8a9123244c0B44CD',
+  seniorSymbol: 'LST',
+  juniorSymbol: 'LJT',
+};
+
 describe('MarketStateService', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -137,6 +144,29 @@ describe('MarketStateService', () => {
         halted: false,
         stalePrice: false,
         warnings: [],
+      },
+    });
+  });
+
+  it('returns mEDGE market display fields while preserving live LST/LJT tranche symbols', async () => {
+    const { service } = await createService(PRODUCTION_LIKE_MARKET);
+
+    const detail = await service.getMarket(PRODUCTION_LIKE_MARKET.address);
+
+    expect(detail).toMatchObject({
+      address: PRODUCTION_LIKE_MARKET.address,
+      symbol: 'mEDGE',
+      name: 'mEDGE',
+      description: 'mEDGE Ladder market',
+      underlying: {
+        symbol: 'mEDGE',
+        address: PRODUCTION_LIKE_MARKET.ytTokenAddress,
+      },
+      senior: {
+        symbol: 'LST',
+      },
+      junior: {
+        symbol: 'LJT',
       },
     });
   });
@@ -373,6 +403,23 @@ describe('MarketStateService', () => {
     expect(constraints).not.toHaveProperty('buttonLabel');
   });
 
+  it('returns mEDGE YT trade constraints while preserving live LST/LJT tranche symbols', async () => {
+    const { service } = await createService(PRODUCTION_LIKE_MARKET);
+
+    const constraints = await service.getTradeConstraints(PRODUCTION_LIKE_MARKET.address);
+
+    expect(constraints.tokens).toMatchObject({
+      yt: { symbol: 'mEDGE', address: PRODUCTION_LIKE_MARKET.ytTokenAddress, decimals: 18 },
+      senior: { symbol: 'LST', address: PRODUCTION_LIKE_MARKET.seniorTrancheAddress, decimals: 18 },
+      junior: { symbol: 'LJT', address: PRODUCTION_LIKE_MARKET.juniorTrancheAddress, decimals: 18 },
+    });
+    expect(constraints.approvals).toMatchObject({
+      depositYt: { token: PRODUCTION_LIKE_MARKET.ytTokenAddress, spender: PRODUCTION_LIKE_MARKET.address },
+      withdrawSenior: { token: PRODUCTION_LIKE_MARKET.seniorTrancheAddress, spender: PRODUCTION_LIKE_MARKET.address },
+      withdrawJunior: { token: PRODUCTION_LIKE_MARKET.juniorTrancheAddress, spender: PRODUCTION_LIKE_MARKET.address },
+    });
+  });
+
   it('returns production factsheet rows with explicit source labels', async () => {
     const { service } = await createService();
 
@@ -396,6 +443,14 @@ describe('MarketStateService', () => {
       config: 'config',
       unavailable: 'unavailable',
     });
+  });
+
+  it('returns mEDGE production factsheet title for configured YT address', async () => {
+    const { service } = await createService(PRODUCTION_LIKE_MARKET);
+
+    const factsheet = await service.getFactsheet(PRODUCTION_LIKE_MARKET.address);
+
+    expect(factsheet.title).toBe('mEDGE Market Factsheet');
   });
 
   it('keeps chart config metadata only without fixture data series', () => {

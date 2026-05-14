@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Address } from 'viem';
+import { marketDisplaySymbol } from './token-display.config';
 import { ViemClientService } from './viem-client.service';
 import {
   ERC20_METADATA_ABI,
@@ -396,10 +397,12 @@ export class ContractReaderService {
     const seniorAssetBalance = BigInt(seniorAssets.toString());
     const juniorAssetBalance = BigInt(juniorAssets.toString());
 
+    const portfolioMarketSymbol = marketDisplaySymbol(market);
+
     if (seniorShareBalance > 0n) {
       positions.push({
         marketAddress: market.address,
-        marketSymbol: market.seniorSymbol.replace(/^st-/, '') || 'mEDGE',
+        marketSymbol: portfolioMarketSymbol,
         assetType: 'senior',
         assetSymbol: market.seniorSymbol,
         tokenAddress: market.seniorTrancheAddress,
@@ -412,7 +415,7 @@ export class ContractReaderService {
     if (juniorShareBalance > 0n) {
       positions.push({
         marketAddress: market.address,
-        marketSymbol: market.juniorSymbol.replace(/^jt-/, '') || 'mEDGE',
+        marketSymbol: portfolioMarketSymbol,
         assetType: 'junior',
         assetSymbol: market.juniorSymbol,
         tokenAddress: market.juniorTrancheAddress,

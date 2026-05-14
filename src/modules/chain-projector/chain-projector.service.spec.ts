@@ -394,6 +394,25 @@ describe('ChainProjectorService', () => {
     expect(db.marketOnConflictDoUpdate).toHaveBeenCalledTimes(2);
   });
 
+  it('uses mEDGE as projected market name for production YT address', async () => {
+    const productionLikeMarket = {
+      ...LIVE_MARKET,
+      ytTokenAddress: '0x7060176d148D07834050473C8a9123244c0B44CD',
+      seniorSymbol: 'LST',
+      juniorSymbol: 'LJT',
+    };
+    const { service, db } = await createService({ liveMarket: productionLikeMarket });
+
+    await service.runOnce();
+
+    expect(db.marketValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: productionLikeMarket.address.toLowerCase(),
+        name: 'mEDGE',
+      }),
+    );
+  });
+
   it('runOnce starts at deployment block when no cursor exists', async () => {
     const { service, publicClient } = await createService({
       deploymentBlock: 123,

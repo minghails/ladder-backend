@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { decodeEventLog, type Address, type Hex } from 'viem';
 import { eq } from 'drizzle-orm';
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
+import { marketDisplaySymbol } from '@shared/blockchain/token-display.config';
 import { ViemClientService } from '@shared/blockchain/viem-client.service';
 import { JT_TRANCHE_ABI, MARKET_ABI, ST_TRANCHE_ABI } from '@shared/blockchain/contracts';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
@@ -104,7 +105,7 @@ function valueToAddress(value: unknown): string | null {
 }
 
 function marketNameFromLiveState(live: LiveMarketState): string {
-  const symbol = live.seniorSymbol.replace(/^st-/, '').trim();
+  const symbol = marketDisplaySymbol(live).trim();
   return symbol === '' ? normalizeAddress(live.address) : symbol;
 }
 

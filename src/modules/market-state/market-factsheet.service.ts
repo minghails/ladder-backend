@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { LiveMarketState, TokenMetadata } from '@shared/blockchain/contract-reader.service';
+import { marketDisplaySymbol } from '@shared/blockchain/token-display.config';
 import { formatScaledRatio } from './market-calculations';
 import { BASE_SEPOLIA_MARKET_NETWORK, MARKET_FACTSHEET_CONFIG_ROWS } from './market-metadata.config';
 
@@ -21,10 +22,6 @@ export interface MarketFactsheetDto {
   };
 }
 
-function stripTranchePrefix(symbol: string): string {
-  return symbol.replace(/^(st|jt)-/, '') || symbol;
-}
-
 function availability(value: boolean): string {
   return value ? 'Available' : 'Unavailable';
 }
@@ -32,7 +29,7 @@ function availability(value: boolean): string {
 @Injectable()
 export class MarketFactsheetService {
   build(live: LiveMarketState, baseToken: TokenMetadata): MarketFactsheetDto {
-    const marketSymbol = stripTranchePrefix(live.seniorSymbol);
+    const marketSymbol = marketDisplaySymbol(live);
 
     return {
       title: `${marketSymbol} Market Factsheet`,

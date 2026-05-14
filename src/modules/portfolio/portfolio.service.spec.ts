@@ -248,6 +248,26 @@ describe('PortfolioService', () => {
     };
   }
 
+  it('uses mEDGE market display symbol for production YT address in portfolio repository lookups', async () => {
+    const productionLikeMarket = {
+      ...LIVE_MARKET,
+      ytTokenAddress: '0x7060176d148D07834050473C8a9123244c0B44CD',
+      seniorSymbol: 'LST',
+      juniorSymbol: 'LJT',
+    };
+    const { service, activityRepository, claimablesRepository } = await createService({
+      market: productionLikeMarket,
+      positions: [],
+      fakeDb: { depositRequestRows: DB_REQUEST_ROWS },
+    });
+
+    const portfolio = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001');
+
+    expect(activityRepository.findByWallet).toHaveBeenCalledWith('0xabcdef0000000000000000000000000000000001', 'mEDGE');
+    expect(claimablesRepository.findByWallet).toHaveBeenCalledWith('0xabcdef0000000000000000000000000000000001', 'mEDGE');
+    expect(portfolio.pendingRequests[0]?.marketSymbol).toBe('mEDGE');
+  });
+
   it('returns portfolio summary and positions from live tranche balances without mock sections by default', async () => {
     const { service, contractReader } = await createService();
 

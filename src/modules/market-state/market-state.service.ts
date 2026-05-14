@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { ContractReaderService, type LiveMarketState } from '@shared/blockchain/contract-reader.service';
+import { marketDisplaySymbol, ytDisplaySymbol } from '@shared/blockchain/token-display.config';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { marketSnapshots } from '@shared/database/schema';
 import {
@@ -166,16 +167,12 @@ function normalizeAddress(address: string): string {
   return address.toLowerCase();
 }
 
-function stripTranchePrefix(symbol: string): string {
-  return symbol.replace(/^(st|jt)-/, '') || symbol;
-}
-
 function statusWarnings(live: LiveMarketState): string[] {
   return [...(live.halted ? ['MARKET_HALTED'] : []), ...(isPriceStale(live.lastUpdatedTime) ? ['STALE_PRICE'] : [])];
 }
 
 async function toMarketDetail(live: LiveMarketState, contractReader: ContractReaderService, apy: MarketApyResult): Promise<MarketDetailDto> {
-  const marketSymbol = stripTranchePrefix(live.seniorSymbol);
+  const marketSymbol = marketDisplaySymbol(live);
   const stalePrice = isPriceStale(live.lastUpdatedTime);
   const baseTokenMetadata = await contractReader.getTokenMetadata(live.baseTokenAddress);
 
@@ -319,7 +316,7 @@ export class MarketStateService {
     return {
       market: live.address,
       tokens: {
-        yt: { symbol: stripTranchePrefix(live.seniorSymbol), address: live.ytTokenAddress, decimals: 18 },
+        yt: { symbol: ytDisplaySymbol(live), address: live.ytTokenAddress, decimals: 18 },
         base: { symbol: baseTokenMetadata.symbol, address: live.baseTokenAddress, decimals: baseTokenMetadata.decimals },
         senior: { symbol: live.seniorSymbol, address: live.seniorTrancheAddress, decimals: 18 },
         junior: { symbol: live.juniorSymbol, address: live.juniorTrancheAddress, decimals: 18 },
