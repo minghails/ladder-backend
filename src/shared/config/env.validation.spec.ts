@@ -114,6 +114,20 @@ describe('validateEnv', () => {
 
     expect(result.HEALTH_CHECK_TIMEOUT_MS).toBe(750);
     expect(result.HEALTH_PROJECTOR_MAX_LAG_BLOCKS).toBe(25);
+    expect(result.HEALTH_PROJECTOR_LAG_CHECK_ENABLED).toBe(true);
+  });
+
+  it('should allow disabling projector lag health checks', () => {
+    const env = {
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/ladder_dev',
+      RPC_URL: 'http://localhost:8545',
+      MARKET_ADDRESS: '0x1234567890123456789012345678901234567890',
+      HEALTH_PROJECTOR_LAG_CHECK_ENABLED: 'false',
+    };
+
+    const result = validateEnv(env);
+
+    expect(result.HEALTH_PROJECTOR_LAG_CHECK_ENABLED).toBe(false);
   });
 
   it('should reject a negative deployment block', () => {

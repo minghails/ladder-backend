@@ -78,4 +78,6 @@ export const healthConfig = registerAs('health', () => ({
     process.env['HEALTH_PROJECTOR_MAX_LAG_BLOCKS'] ?? '20',
     10,
   ),
+  projectorLagCheckEnabled:
+    process.env['HEALTH_PROJECTOR_LAG_CHECK_ENABLED'] !== 'false',
 }));

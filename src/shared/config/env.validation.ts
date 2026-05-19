@@ -53,6 +53,10 @@ const envSchema = z
       .int()
       .nonnegative()
       .default(20),
+    HEALTH_PROJECTOR_LAG_CHECK_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
   })
   .superRefine((config, ctx) => {
     let corsAllowedOrigins: string[];

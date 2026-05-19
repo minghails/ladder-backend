@@ -45,14 +45,18 @@ export class DependencyHealthIndicator {
 
     const database = await this.checkDatabase(timeoutMs);
     const rpc = await this.checkRpc(timeoutMs);
+    const projectorLagCheckEnabled =
+      this.config.get<boolean>('health.projectorLagCheckEnabled') ?? true;
     const projector =
-      rpc.status === 'up' && typeof rpc.currentBlockNumber === 'string'
-        ? await this.checkProjectorFreshness(
-            BigInt(rpc.currentBlockNumber),
-            maxLagBlocks,
-            timeoutMs,
-          )
-        : this.down('rpc unavailable');
+      !projectorLagCheckEnabled
+        ? { status: 'up' as const, lagCheck: 'disabled' }
+        : rpc.status === 'up' && typeof rpc.currentBlockNumber === 'string'
+          ? await this.checkProjectorFreshness(
+              BigInt(rpc.currentBlockNumber),
+              maxLagBlocks,
+              timeoutMs,
+            )
+          : this.down('rpc unavailable');
 
     const details = { database, rpc, projector };
     const isHealthy =

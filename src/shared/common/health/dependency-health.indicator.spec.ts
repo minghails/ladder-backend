@@ -13,6 +13,7 @@ function createIndicator(options?: {
   getBlockNumber?: () => Promise<bigint>;
   timeoutMs?: number;
   maxLagBlocks?: number;
+  projectorLagCheckEnabled?: boolean;
 }) {
   const db = {
     execute: vi
@@ -44,6 +45,9 @@ function createIndicator(options?: {
       }
       if (key === 'health.projectorMaxLagBlocks') {
         return options?.maxLagBlocks ?? 10;
+      }
+      if (key === 'health.projectorLagCheckEnabled') {
+        return options?.projectorLagCheckEnabled ?? true;
       }
       return undefined;
     }),
@@ -124,6 +128,24 @@ describe('DependencyHealthIndicator', () => {
         projector: { status: 'down' },
       },
     });
+  });
+
+  it('skips projector lag check when HEALTH_PROJECTOR_LAG_CHECK_ENABLED is false', async () => {
+    const { indicator, db } = createIndicator({
+      cursor: { lastBlockNumber: '80' },
+      maxLagBlocks: 10,
+      projectorLagCheckEnabled: false,
+    });
+
+    await expect(indicator.isHealthy()).resolves.toEqual({
+      dependencies: {
+        status: 'up',
+        database: { status: 'up' },
+        rpc: { status: 'up', currentBlockNumber: '100' },
+        projector: { status: 'up', lagCheck: 'disabled' },
+      },
+    });
+    expect(db.query.projectorCursors.findFirst).not.toHaveBeenCalled();
   });
 
   it('times out slow checks so /health remains responsive', async () => {
