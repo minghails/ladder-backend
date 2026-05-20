@@ -10,11 +10,13 @@ Reduce background indexer RPC usage by reusing persisted market metadata and tig
 
 ## Status
 
-Not started.
+Completed (2026-05-20).
 
 ## Slices
 
 ### Slice 1 — Projector watched addresses from DB
+
+**Status:** completed (2026-05-20).
 
 **Scope**
 
@@ -33,6 +35,8 @@ Not started.
 - API impact: `No FE-facing API impact`.
 
 ### Slice 2 — Bounded live metadata refresh for projector bootstrap
+
+**Status:** completed (2026-05-20).
 
 **Scope**
 
@@ -54,6 +58,8 @@ Not started.
 - API impact: `No FE-facing API impact`.
 
 ### Slice 3 — Snapshot projector fallback tightening
+
+**Status:** completed (2026-05-20).
 
 **Scope**
 

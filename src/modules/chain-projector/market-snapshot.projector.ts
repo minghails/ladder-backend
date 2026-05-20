@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ContractReaderService } from '@shared/blockchain/contract-reader.service';
+import { ContractReaderService, type TrancheSharePrices } from '@shared/blockchain/contract-reader.service';
 import { DRIZZLE_DB } from '@shared/database/database.constants';
 import { marketSnapshots, type marketEvents } from '@shared/database/schema';
 
@@ -118,15 +118,26 @@ export class MarketSnapshotProjector {
       return undefined;
     }
 
-    const sharePrices = await this.contractReader.getMarketTrancheSharePrices();
     const prior = latestPriorSnapshot(candidates, event);
     const priorMaxRatio = latestPriorMaxRatio(maxRatioPoints, event);
+    let sharePrices: TrancheSharePrices;
+    if (event.eventName === 'PriceUpdated' || event.eventName === 'DepositSettled') {
+      sharePrices = await this.contractReader.getMarketTrancheSharePrices();
+    } else if (prior !== undefined) {
+      sharePrices = {
+        stSharePrice: prior.stSharePrice,
+        jtSharePrice: prior.jtSharePrice,
+      };
+    } else {
+      sharePrices = await this.contractReader.getMarketTrancheSharePrices();
+    }
     const liveFallback =
       event.eventName === 'PriceUpdated' || prior !== undefined
         ? undefined
         : await this.contractReader.getMarketState();
     const historicalMaxStJtRatio =
       priorMaxRatio?.maxStJtRatio ??
+      prior?.maxStJtRatio ??
       await this.contractReader.getMarketMaxStJtRatioAtBlock(event.blockNumber);
     const ytPrice =
       event.eventName === 'PriceUpdated'

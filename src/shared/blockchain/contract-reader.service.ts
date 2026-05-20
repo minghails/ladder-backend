@@ -1,16 +1,16 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Address } from 'viem';
+import {
+  fetchLiveMarketStateMulticall,
+  fetchPortfolioBalanceReadsMulticall,
+  fetchTokenMetadataMulticall,
+  fetchTrancheSharePricesMulticall,
+} from './multicall-market-reads';
 import { DEFAULT_RPC_READ_CACHE_TTL_MS, RpcReadCache } from './rpc-read-cache';
 import { marketDisplaySymbol } from './token-display.config';
 import { ViemClientService } from './viem-client.service';
-import {
-  ERC20_METADATA_ABI,
-  MARKET_ABI,
-  MIDAS_ADAPTOR_ABI,
-  ST_TRANCHE_ABI,
-  JT_TRANCHE_ABI,
-} from './contracts';
+import { MARKET_ABI, ST_TRANCHE_ABI, JT_TRANCHE_ABI } from './contracts';
 
 export interface TrancheSharePrices {
   stSharePrice: string;
@@ -100,10 +100,6 @@ function toStringValue(value: bigint | number | string | boolean): string {
   return value.toString();
 }
 
-function toAddress(value: unknown): Address {
-  return value as Address;
-}
-
 function computeValue(assets: bigint, latestYtPrice: bigint): string {
   return ((assets * latestYtPrice) / SCALE).toString();
 }
@@ -179,22 +175,11 @@ export class ContractReaderService {
   }
 
   private async fetchTokenMetadata(address: string): Promise<TokenMetadata> {
-    const client = this.viem.getPublicClient();
-    const tokenAddress = address as Address;
-    const [symbol, decimals] = await Promise.all([
-      client.readContract({ address: tokenAddress, abi: ERC20_METADATA_ABI, functionName: 'symbol' }),
-      client.readContract({ address: tokenAddress, abi: ERC20_METADATA_ABI, functionName: 'decimals' }),
-    ]);
-
-    return {
-      address,
-      symbol: toStringValue(symbol),
-      decimals,
-    };
+    return fetchTokenMetadataMulticall(this.viem.getPublicClient(), address);
   }
 
   async getMarketState(): Promise<LiveMarketState> {
-    const key = `market:${this.viem.getMarketAddress()}`;
+    const key = `market:${this.viem.getMarketAddress().toLowerCase()}`;
     const cached = this.marketStateCache.get(key);
     if (cached !== undefined) {
       return cached;
@@ -206,92 +191,18 @@ export class ContractReaderService {
   }
 
   private async fetchMarketState(): Promise<LiveMarketState> {
-    const client = this.viem.getPublicClient();
-    const marketAddress = this.viem.getMarketAddress();
-
-    const [
-      ytTokenAddress,
-      seniorTrancheAddress,
-      juniorTrancheAddress,
-      adaptorAddress,
-      nav,
-      navSt,
-      navJt,
-      currentStJtRatio,
-      maxStJtRatio,
-      latestYtPrice,
-      lastUpdatedTime,
-      halted,
-    ] = await Promise.all([
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'yt' }),
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'st' }),
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'jt' }),
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'adaptor' }),
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'nav' }),
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'navSt' }),
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'navJt' }),
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'currentStJtRatio' }),
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'maxStJtRatio' }),
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'latestYtPrice' }),
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'lastUpdatedTime' }),
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'halted' }),
-    ]);
-
-    const stAddress = toAddress(seniorTrancheAddress);
-    const jtAddress = toAddress(juniorTrancheAddress);
-    const adaptor = toAddress(adaptorAddress);
-
-    const [seniorSymbol, juniorSymbol, depositBaseInstant, depositBaseRequest, withdrawBaseAsync, withdrawBaseInstant] =
-      await Promise.all([
-        client.readContract({ address: stAddress, abi: ST_TRANCHE_ABI, functionName: 'symbol' }),
-        client.readContract({ address: jtAddress, abi: JT_TRANCHE_ABI, functionName: 'symbol' }),
-        client.readContract({ address: adaptor, abi: MIDAS_ADAPTOR_ABI, functionName: 'isDepositInstantEnabled' }),
-        client.readContract({ address: adaptor, abi: MIDAS_ADAPTOR_ABI, functionName: 'isDepositRequestEnabled' }),
-        client.readContract({ address: adaptor, abi: MIDAS_ADAPTOR_ABI, functionName: 'isWithdrawRequestEnabled' }),
-        client.readContract({ address: adaptor, abi: MIDAS_ADAPTOR_ABI, functionName: 'isWithdrawInstantEnabled' }),
-      ]);
-
-    return {
-      address: marketAddress,
-      ytTokenAddress: toStringValue(ytTokenAddress),
-      baseTokenAddress: this.viem.getBaseTokenAddress(),
-      seniorTrancheAddress: stAddress,
-      juniorTrancheAddress: jtAddress,
-      seniorSymbol: toStringValue(seniorSymbol),
-      juniorSymbol: toStringValue(juniorSymbol),
-      nav: toStringValue(nav),
-      navSt: toStringValue(navSt),
-      navJt: toStringValue(navJt),
-      currentStJtRatio: toStringValue(currentStJtRatio),
-      maxStJtRatio: toStringValue(maxStJtRatio),
-      latestYtPrice: toStringValue(latestYtPrice),
-      lastUpdatedTime: toStringValue(lastUpdatedTime),
-      halted,
-      capabilities: {
-        depositBaseInstant,
-        depositBaseRequest,
-        withdrawBaseAsync,
-        withdrawBaseInstant,
-      },
-    };
+    return fetchLiveMarketStateMulticall(
+      this.viem.getPublicClient(),
+      this.viem.getMarketAddress(),
+      this.viem.getBaseTokenAddress(),
+    );
   }
 
   async getMarketTrancheSharePrices(): Promise<TrancheSharePrices> {
-    const client = this.viem.getPublicClient();
-    const marketAddress = this.viem.getMarketAddress();
-    const [seniorTrancheAddress, juniorTrancheAddress] = await Promise.all([
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'st' }),
-      client.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'jt' }),
-    ]);
-    const [stSharePrice, jtSharePrice] = await Promise.all([
-      client.readContract({ address: toAddress(seniorTrancheAddress), abi: ST_TRANCHE_ABI, functionName: 'convertToAssets', args: [SCALE] }),
-      client.readContract({ address: toAddress(juniorTrancheAddress), abi: JT_TRANCHE_ABI, functionName: 'convertToAssets', args: [SCALE] }),
-    ]);
-
-    return {
-      stSharePrice: toStringValue(stSharePrice),
-      jtSharePrice: toStringValue(jtSharePrice),
-    };
+    return fetchTrancheSharePricesMulticall(
+      this.viem.getPublicClient(),
+      this.viem.getMarketAddress(),
+    );
   }
 
   async getMarketMaxStJtRatioAtBlock(blockNumber: string): Promise<string> {
@@ -399,43 +310,25 @@ export class ContractReaderService {
     walletAddress: string,
     preloadedMarket?: LiveMarketState,
   ): Promise<LivePortfolioPosition[]> {
-    const client = this.viem.getPublicClient();
     const market = preloadedMarket ?? (await this.getMarketState());
     const wallet = walletAddress as Address;
     const stAddress = market.seniorTrancheAddress as Address;
     const jtAddress = market.juniorTrancheAddress as Address;
-
-    const [seniorShares, juniorShares] = await Promise.all([
-      client.readContract({ address: stAddress, abi: ST_TRANCHE_ABI, functionName: 'balanceOf', args: [wallet] }),
-      client.readContract({ address: jtAddress, abi: JT_TRANCHE_ABI, functionName: 'balanceOf', args: [wallet] }),
-    ]);
-
-    const seniorShareBalance = BigInt(seniorShares.toString());
-    const juniorShareBalance = BigInt(juniorShares.toString());
     const latestYtPrice = BigInt(market.latestYtPrice);
 
-    const [seniorAssets, juniorAssets] = await Promise.all([
-      seniorShareBalance > 0n
-        ? client.readContract({
-            address: stAddress,
-            abi: ST_TRANCHE_ABI,
-            functionName: 'convertToAssets',
-            args: [seniorShareBalance],
-          })
-        : Promise.resolve(0n),
-      juniorShareBalance > 0n
-        ? client.readContract({
-            address: jtAddress,
-            abi: JT_TRANCHE_ABI,
-            functionName: 'convertToAssets',
-            args: [juniorShareBalance],
-          })
-        : Promise.resolve(0n),
-    ]);
+    const { seniorShares, juniorShares, seniorAssets, juniorAssets } =
+      await fetchPortfolioBalanceReadsMulticall(
+        this.viem.getPublicClient(),
+        stAddress,
+        jtAddress,
+        wallet,
+      );
 
     const positions: LivePortfolioPosition[] = [];
-    const seniorAssetBalance = BigInt(seniorAssets.toString());
-    const juniorAssetBalance = BigInt(juniorAssets.toString());
+    const seniorShareBalance = seniorShares;
+    const juniorShareBalance = juniorShares;
+    const seniorAssetBalance = seniorAssets;
+    const juniorAssetBalance = juniorAssets;
 
     const portfolioMarketSymbol = marketDisplaySymbol(market);
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createPublicClient, decodeEventLog, encodeAbiParameters, encodeEventTopics, http, isAddress, type Address } from 'viem';
+import { baseSepolia } from 'viem/chains';
 import { ContractReaderService } from '../../src/shared/blockchain/contract-reader.service';
 import {
   BASE_SEPOLIA_ADDRESSES,
@@ -27,7 +28,7 @@ function chainRpcUrl(): string {
 }
 
 function contractReader(rpcUrl: string): ContractReaderService {
-  const publicClient = createPublicClient({ transport: http(rpcUrl) });
+  const publicClient = createPublicClient({ chain: baseSepolia, transport: http(rpcUrl) });
   const viem = {
     getPublicClient: () => publicClient,
     getMarketAddress: () => BASE_SEPOLIA_ADDRESSES.market as Address,

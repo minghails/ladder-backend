@@ -10,11 +10,13 @@ Replace many sequential viem `readContract` calls with batched multicall operati
 
 ## Status
 
-Not started.
+Completed (2026-05-20).
 
 ## Slices
 
 ### Slice 1 — Multicall market state
+
+**Status:** completed (2026-05-20).
 
 **Scope**
 
@@ -36,6 +38,8 @@ Not started.
 
 ### Slice 2 — Multicall token metadata and tranche share prices
 
+**Status:** completed (2026-05-20).
+
 **Scope**
 
 - Batch ERC20 metadata reads.
@@ -53,6 +57,8 @@ Not started.
 - API impact: `No FE-facing API impact`.
 
 ### Slice 3 — Multicall portfolio wallet reads
+
+**Status:** completed (2026-05-20).
 
 **Scope**
 

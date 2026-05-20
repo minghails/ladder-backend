@@ -186,8 +186,33 @@ describe('ChainProjectorService', () => {
     };
   }
 
+  function persistedMarketRow(
+    overrides: Partial<{
+      updatedAt: Date;
+      seniorTrancheAddress: string;
+      juniorTrancheAddress: string;
+    }> = {},
+  ) {
+    return {
+      address: LIVE_MARKET.address.toLowerCase(),
+      name: 'mEDGE',
+      ytTokenAddress: LIVE_MARKET.ytTokenAddress.toLowerCase(),
+      baseTokenAddress: LIVE_MARKET.baseTokenAddress.toLowerCase(),
+      seniorTrancheAddress: (
+        overrides.seniorTrancheAddress ?? LIVE_MARKET.seniorTrancheAddress
+      ).toLowerCase(),
+      juniorTrancheAddress: (
+        overrides.juniorTrancheAddress ?? LIVE_MARKET.juniorTrancheAddress
+      ).toLowerCase(),
+      halted: false,
+      createdAt: new Date('2026-05-01T00:00:00.000Z'),
+      updatedAt: overrides.updatedAt ?? new Date(),
+    };
+  }
+
   async function createService({
     liveMarket = LIVE_MARKET,
+    persistedMarket,
     head = 100n,
     cursor,
     logs = [],
@@ -196,6 +221,7 @@ describe('ChainProjectorService', () => {
     batchSize = 100,
     projectorEnabled = false,
     pollIntervalMs = 15_000,
+    marketRefreshMs = 900_000,
     eventInsertRejects = false,
     snapshotProjector = { projectEvents: vi.fn().mockResolvedValue(undefined) },
     priceUpdateProjector = { projectEvents: vi.fn().mockResolvedValue(undefined) },
@@ -206,8 +232,10 @@ describe('ChainProjectorService', () => {
       findCostBasisByWallet: vi.fn().mockResolvedValue([]),
       upsertCostBasis: vi.fn().mockResolvedValue(undefined),
     },
+    marketsFindFirst,
   }: {
     liveMarket?: LiveMarketState;
+    persistedMarket?: ReturnType<typeof persistedMarketRow>;
     head?: bigint;
     cursor?: { lastBlockNumber: string };
     logs?: ReturnType<typeof priceUpdatedLog>[];
@@ -216,6 +244,7 @@ describe('ChainProjectorService', () => {
     batchSize?: number;
     projectorEnabled?: boolean;
     pollIntervalMs?: number;
+    marketRefreshMs?: number;
     eventInsertRejects?: boolean;
     snapshotProjector?: { projectEvents: ReturnType<typeof vi.fn> };
     priceUpdateProjector?: { projectEvents: ReturnType<typeof vi.fn> };
@@ -226,6 +255,7 @@ describe('ChainProjectorService', () => {
       findCostBasisByWallet: ReturnType<typeof vi.fn>;
       upsertCostBasis: ReturnType<typeof vi.fn>;
     };
+    marketsFindFirst?: ReturnType<typeof vi.fn>;
   } = {}) {
     const marketOnConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
     const eventOnConflictDoNothing = eventInsertRejects
@@ -267,11 +297,14 @@ describe('ChainProjectorService', () => {
           'projector.confirmations': confirmations,
           'projector.batchSize': batchSize,
           'projector.pollIntervalMs': pollIntervalMs,
+          'projector.marketRefreshMs': marketRefreshMs,
         };
         if (key === 'projector.enabled') return projectorEnabled;
         return values[key];
       }),
     };
+    const marketsQueryFindFirst =
+      marketsFindFirst ?? vi.fn().mockResolvedValue(persistedMarket);
     const contractReader = {
       getMarketState: vi.fn().mockResolvedValue(liveMarket),
     };
@@ -298,6 +331,9 @@ describe('ChainProjectorService', () => {
             query: {
               projectorCursors: {
                 findFirst: vi.fn().mockResolvedValue(cursor),
+              },
+              markets: {
+                findFirst: marketsQueryFindFirst,
               },
             },
           },
@@ -371,27 +407,61 @@ describe('ChainProjectorService', () => {
   });
 
   it('runOnce bootstraps market metadata from live contract state idempotently', async () => {
-    const { service, contractReader, db } = await createService();
+    const freshRow = persistedMarketRow({ updatedAt: new Date() });
+    const { service, contractReader, db } = await createService({
+      marketsFindFirst: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValue(freshRow),
+    });
 
     await service.runOnce();
     await service.runOnce();
 
-    expect(contractReader.getMarketState).toHaveBeenCalledTimes(2);
-    expect(db.marketValues).toHaveBeenNthCalledWith(
-      1,
+    expect(contractReader.getMarketState).toHaveBeenCalledTimes(1);
+    expect(db.marketValues).toHaveBeenCalledTimes(1);
+    expect(db.marketValues).toHaveBeenCalledWith(
       expect.objectContaining({
         address: LIVE_MARKET.address.toLowerCase(),
         name: 'mEDGE',
       }),
     );
-    expect(db.marketValues).toHaveBeenNthCalledWith(
-      2,
+    expect(db.marketOnConflictDoUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses persisted market addresses for getLogs when a fresh markets row exists', async () => {
+    const row = persistedMarketRow({ updatedAt: new Date() });
+    const { service, contractReader, publicClient, db } = await createService({
+      persistedMarket: row,
+    });
+
+    await service.runOnce();
+
+    expect(contractReader.getMarketState).not.toHaveBeenCalled();
+    expect(publicClient.getLogs).toHaveBeenCalledWith(
       expect.objectContaining({
-        address: LIVE_MARKET.address.toLowerCase(),
-        name: 'mEDGE',
+        address: [
+          row.address,
+          row.seniorTrancheAddress,
+          row.juniorTrancheAddress,
+        ],
       }),
     );
-    expect(db.marketOnConflictDoUpdate).toHaveBeenCalledTimes(2);
+    expect(db.marketValues).not.toHaveBeenCalled();
+  });
+
+  it('refreshes live market metadata when the persisted row is stale', async () => {
+    vi.useFakeTimers();
+    const staleUpdatedAt = new Date('2026-05-01T00:00:00.000Z');
+    vi.setSystemTime(new Date('2026-05-01T00:20:00.000Z'));
+    const { service, contractReader } = await createService({
+      persistedMarket: persistedMarketRow({ updatedAt: staleUpdatedAt }),
+      marketRefreshMs: 900_000,
+    });
+
+    await service.runOnce();
+
+    expect(contractReader.getMarketState).toHaveBeenCalledTimes(1);
   });
 
   it('uses mEDGE as projected market name for production YT address', async () => {

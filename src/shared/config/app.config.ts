@@ -74,6 +74,10 @@ export const projectorConfig = registerAs('projector', () => ({
     process.env['PROJECTOR_POLL_INTERVAL_MS'] ?? '15000',
     10,
   ),
+  marketRefreshMs: parseInt(
+    process.env['PROJECTOR_MARKET_REFRESH_MS'] ?? '900000',
+    10,
+  ),
 }));
 
 export const healthConfig = registerAs('health', () => ({

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createPublicClient, http, type PublicClient, type Address } from 'viem';
+import { createPublicClient, http, type PublicClient, type Address, type Chain } from 'viem';
+import { base, baseSepolia } from 'viem/chains';
 
 @Injectable()
 export class ViemClientService {
@@ -20,6 +21,7 @@ export class ViemClientService {
     this.chainId = this.config.getOrThrow<number>('projector.chainId');
 
     this.publicClient = createPublicClient({
+      chain: chainForId(this.chainId),
       transport: http(rpcUrl),
     });
   }
@@ -39,4 +41,14 @@ export class ViemClientService {
   getChainId(): number {
     return this.chainId;
   }
+}
+
+function chainForId(chainId: number): Chain | undefined {
+  if (chainId === baseSepolia.id) {
+    return baseSepolia;
+  }
+  if (chainId === base.id) {
+    return base;
+  }
+  return undefined;
 }

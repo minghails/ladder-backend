@@ -139,15 +139,38 @@ describe('MarketSnapshotProjector', () => {
     ]);
   });
 
-  it.each(['DepositYT', 'WithdrawYT', 'DepositSettled'] as const)(
-    'creates a %s snapshot using carried price',
+  it('reads fresh share prices for PriceUpdated even when a prior snapshot exists', async () => {
+    const { projector, snapshotValues, contractReader } = createProjector({
+      existingSnapshots: [
+        previousSnapshot({
+          stSharePrice: 'old-st-share-price',
+          jtSharePrice: 'old-jt-share-price',
+        }),
+      ],
+    });
+
+    await projector.projectEvents([event('PriceUpdated')]);
+
+    expect(contractReader.getMarketTrancheSharePrices).toHaveBeenCalledTimes(1);
+    expect(snapshotValues).toHaveBeenCalledWith([
+      expect.objectContaining({
+        stSharePrice: '1000000000000000000',
+        jtSharePrice: '2000000000000000000',
+      }),
+    ]);
+  });
+
+  it.each(['DepositYT', 'WithdrawYT'] as const)(
+    'creates a %s snapshot using carried price and share prices',
     async (eventName) => {
-      const { projector, snapshotValues } = createProjector({
+      const { projector, snapshotValues, contractReader } = createProjector({
         existingSnapshots: [previousSnapshot({ ytPrice: '888', halted: 'false' })],
       });
 
       await projector.projectEvents([event(eventName)]);
 
+      expect(contractReader.getMarketTrancheSharePrices).not.toHaveBeenCalled();
+      expect(contractReader.getMarketState).not.toHaveBeenCalled();
       expect(snapshotValues).toHaveBeenCalledWith([
         expect.objectContaining({
           nav: '10',
@@ -162,8 +185,26 @@ describe('MarketSnapshotProjector', () => {
     },
   );
 
+  it('reads fresh share prices for DepositSettled when a prior snapshot exists', async () => {
+    const { projector, snapshotValues, contractReader } = createProjector({
+      existingSnapshots: [previousSnapshot({ ytPrice: '888', halted: 'false' })],
+    });
+
+    await projector.projectEvents([event('DepositSettled')]);
+
+    expect(contractReader.getMarketTrancheSharePrices).toHaveBeenCalledTimes(1);
+    expect(contractReader.getMarketState).not.toHaveBeenCalled();
+    expect(snapshotValues).toHaveBeenCalledWith([
+      expect.objectContaining({
+        stSharePrice: '1000000000000000000',
+        jtSharePrice: '2000000000000000000',
+        ytPrice: '888',
+      }),
+    ]);
+  });
+
   it('uses batch-created prior price for later non-price events', async () => {
-    const { projector, snapshotValues } = createProjector();
+    const { projector, snapshotValues, contractReader } = createProjector();
 
     await projector.projectEvents([
       event('PriceUpdated', { logIndex: '1', args: { newPrice: '777' } }),
@@ -177,10 +218,12 @@ describe('MarketSnapshotProjector', () => {
       ytPrice: '777',
       maxStJtRatio: '7000000000000000000',
     });
+    expect(contractReader.getMarketTrancheSharePrices).toHaveBeenCalledTimes(1);
+    expect(contractReader.getMarketState).not.toHaveBeenCalled();
   });
 
   it('carries MaxStJtRatioUpdated into later snapshots by event order', async () => {
-    const { projector, snapshotValues } = createProjector({
+    const { projector, snapshotValues, contractReader } = createProjector({
       existingSnapshots: [previousSnapshot({ maxStJtRatio: '6000000000000000000' })],
     });
 
@@ -207,6 +250,8 @@ describe('MarketSnapshotProjector', () => {
         maxStJtRatio: '4000000000000000000',
       }),
     ]);
+    expect(contractReader.getMarketMaxStJtRatioAtBlock).not.toHaveBeenCalled();
+    expect(contractReader.getMarketTrancheSharePrices).not.toHaveBeenCalled();
   });
 
   it('creates a MaxStJtRatioUpdated snapshot by copying prior market values', async () => {

@@ -23,10 +23,24 @@ import { DepositRequestProjector } from './deposit-request.projector';
 import { PortfolioAccountingRepository } from '../portfolio/portfolio-accounting.repository';
 import { applyDeposit, applyWithdrawal, type CostBasisState } from '../portfolio/portfolio-accounting.service';
 
+type PersistedMarketRow = typeof markets.$inferSelect;
+
+interface MarketProjectorContext {
+  address: string;
+  ytTokenAddress: string;
+  baseTokenAddress: string;
+  seniorTrancheAddress: string;
+  juniorTrancheAddress: string;
+  halted: boolean;
+}
+
 interface ChainProjectorDatabase {
   query: {
     projectorCursors: {
       findFirst: (config: unknown) => Promise<{ lastBlockNumber: string } | undefined>;
+    };
+    markets: {
+      findFirst: (config: unknown) => Promise<PersistedMarketRow | undefined>;
     };
   };
   insert: (table: unknown) => {
@@ -181,11 +195,11 @@ export class ChainProjectorService
 
     const toBlock = minBigInt(fromBlock + batchSize - 1n, safeToBlock);
 
-    const live = await this.bootstrapConfiguredMarket();
+    const marketContext = await this.resolveMarketContext(marketAddress);
     const watchedAddresses = [
       marketAddress,
-      normalizeAddress(live.seniorTrancheAddress),
-      normalizeAddress(live.juniorTrancheAddress),
+      normalizeAddress(marketContext.seniorTrancheAddress),
+      normalizeAddress(marketContext.juniorTrancheAddress),
     ] as Address[];
     const logs = (await client.getLogs({
       address: watchedAddresses,
@@ -198,7 +212,7 @@ export class ChainProjectorService
       chainId,
       marketAddress,
       blockTimestamps,
-      live,
+      marketContext,
     );
 
     if (decoded.events.length > 0) {
@@ -241,8 +255,29 @@ export class ChainProjectorService
     }
   }
 
-  private async bootstrapConfiguredMarket(): Promise<LiveMarketState> {
+  private async resolveMarketContext(marketAddress: string): Promise<MarketProjectorContext> {
+    const row = await this.db.query.markets.findFirst({
+      where: eq(markets.address, normalizeAddress(marketAddress)),
+    });
+
+    if (row !== undefined && !this.isPersistedMarketStale(row)) {
+      return persistedMarketToProjectorContext(row);
+    }
+
+    return this.bootstrapConfiguredMarket();
+  }
+
+  private isPersistedMarketStale(row: PersistedMarketRow): boolean {
+    const refreshMs = this.config.get<number>('projector.marketRefreshMs') ?? 900_000;
+    return Date.now() - row.updatedAt.getTime() >= refreshMs;
+  }
+
+  private async bootstrapConfiguredMarket(): Promise<MarketProjectorContext> {
     const live = await this.contractReader.getMarketState();
+    this.logger.log(
+      { marketAddress: normalizeAddress(live.address) },
+      'projector refreshed live market metadata',
+    );
     const now = new Date();
     const row = {
       address: normalizeAddress(live.address),
@@ -302,7 +337,7 @@ export class ChainProjectorService
     chainId: number,
     marketAddress: string,
     blockTimestamps: Map<string, Date>,
-    live: LiveMarketState,
+    marketContext: MarketProjectorContext,
   ): {
     events: (typeof marketEvents.$inferInsert)[];
     trancheDeposits: TrancheDepositEvent[];
@@ -327,9 +362,15 @@ export class ChainProjectorService
           continue;
         }
 
-        if (logAddress === normalizeAddress(live.seniorTrancheAddress) || logAddress === normalizeAddress(live.juniorTrancheAddress)) {
+        if (
+          logAddress === normalizeAddress(marketContext.seniorTrancheAddress) ||
+          logAddress === normalizeAddress(marketContext.juniorTrancheAddress)
+        ) {
           const decoded = decodeEventLog({
-            abi: logAddress === normalizeAddress(live.seniorTrancheAddress) ? ST_TRANCHE_ABI : JT_TRANCHE_ABI,
+            abi:
+              logAddress === normalizeAddress(marketContext.seniorTrancheAddress)
+                ? ST_TRANCHE_ABI
+                : JT_TRANCHE_ABI,
             data: log.data,
             topics: log.topics,
           });
@@ -343,7 +384,8 @@ export class ChainProjectorService
           trancheDeposits.push({
             txHash: log.transactionHash,
             logIndex: log.logIndex.toString(),
-            tranche: logAddress === normalizeAddress(live.seniorTrancheAddress) ? 'senior' : 'junior',
+            tranche:
+              logAddress === normalizeAddress(marketContext.seniorTrancheAddress) ? 'senior' : 'junior',
             owner: normalizeAddress(String(args['owner'])),
             assets: String(args['assets']),
             shares: String(args['shares']),
@@ -623,4 +665,15 @@ function hasCompleteLogIdentity(log: RawMarketLog): log is CompleteMarketLog {
 
 function isProjectedEventName(eventName: string): eventName is ProjectedEventName {
   return SUPPORTED_MARKET_EVENT_NAMES.includes(eventName as ProjectedEventName);
+}
+
+function persistedMarketToProjectorContext(row: PersistedMarketRow): MarketProjectorContext {
+  return {
+    address: row.address,
+    ytTokenAddress: row.ytTokenAddress,
+    baseTokenAddress: row.baseTokenAddress,
+    seniorTrancheAddress: row.seniorTrancheAddress,
+    juniorTrancheAddress: row.juniorTrancheAddress,
+    halted: row.halted,
+  };
 }

@@ -6,10 +6,10 @@
 
 ## Current status
 
-- Status: in progress
-- Active epic: Epic 2 — Multicall contract reads
-- Active slice: Slice 1 — Multicall market state
-- Latest session log: `sessions/2026-05-20-epic-01-complete.md`
+- Status: completed (Milestones 1–3)
+- Active epic: —
+- Active slice: —
+- Latest session log: `sessions/2026-05-20-review-fixes.md`
 
 ## Execution rules
 
@@ -25,8 +25,8 @@
 | Epic | File | Status |
 |---|---|---|
 | RPC read cache and portfolio dedup | `epics/2026-05-20-epic-01-rpc-read-cache-portfolio-dedup.md` | completed |
-| Multicall contract reads | `epics/2026-05-20-epic-02-multicall-contract-reads.md` | not started |
-| Lighter projector and snapshot RPC reduction | `epics/2026-05-20-epic-03-lighter-projector-snapshot-rpc.md` | not started |
+| Multicall contract reads | `epics/2026-05-20-epic-02-multicall-contract-reads.md` | completed |
+| Lighter projector and snapshot RPC reduction | `epics/2026-05-20-epic-03-lighter-projector-snapshot-rpc.md` | completed |
 
 ## Slice backlog
 
@@ -42,17 +42,17 @@
 
 | Slice | Status | Notes |
 |---|---|---|
-| Slice 1 — Multicall market state | not started | Replace ~18 sequential reads |
-| Slice 2 — Multicall token metadata and tranche share prices | not started | Metadata + convertToAssets batch |
-| Slice 3 — Multicall portfolio wallet reads | not started | Batch balanceOf / convertToAssets |
+| Slice 1 — Multicall market state | completed | 2 multicall batches vs 18 readContract calls |
+| Slice 2 — Multicall token metadata and tranche share prices | completed | ERC20 + tranche share price batching |
+| Slice 3 — Multicall portfolio wallet reads | completed | balanceOf batch + conditional convertToAssets |
 
 ### Epic 3: Lighter projector and snapshot RPC reduction
 
 | Slice | Status | Notes |
 |---|---|---|
-| Slice 1 — Projector watched addresses from DB | not started | Avoid full getMarketState per batch |
-| Slice 2 — Bounded live metadata refresh for projector bootstrap | not started | Refresh on missing row or interval |
-| Slice 3 — Snapshot projector fallback tightening | not started | Prefer snapshot/event data before RPC |
+| Slice 1 — Projector watched addresses from DB | completed | DB ST/JT addresses for getLogs when row fresh |
+| Slice 2 — Bounded live metadata refresh for projector bootstrap | completed | PROJECTOR_MARKET_REFRESH_MS + updatedAt staleness |
+| Slice 3 — Snapshot projector fallback tightening | completed | Prior snapshot share prices and max ratio before RPC |
 
 ## Slice log
 
@@ -63,6 +63,15 @@
 | 2026-05-20 | Epic 1 Slice 2 | completed | No FE-facing API impact | Cached getMarketState/getTokenMetadata; errors not cached. |
 | 2026-05-20 | Epic 1 Slice 3 | completed | No FE-facing API impact | Portfolio overview passes preloaded market to positions path. |
 | 2026-05-20 | Epic 1 complete | completed | No FE-facing API impact | Milestone 1 done; see `sessions/2026-05-20-epic-01-complete.md`. |
+| 2026-05-20 | Epic 2 Slice 1 | completed | No FE-facing API impact | Market state via 2 multicall batches. |
+| 2026-05-20 | Epic 2 Slice 2 | completed | No FE-facing API impact | Token metadata + tranche share prices multicall. |
+| 2026-05-20 | Epic 2 Slice 3 | completed | No FE-facing API impact | Portfolio balances multicall; zero balance skips convert batch. |
+| 2026-05-20 | Epic 2 complete | completed | No FE-facing API impact | Milestone 2 done; see `sessions/2026-05-20-epic-02-complete.md`. |
+| 2026-05-20 | Epic 3 Slice 1 | completed | No FE-facing API impact | Watched addresses from markets table when row fresh. |
+| 2026-05-20 | Epic 3 Slice 2 | completed | No FE-facing API impact | Bounded refresh via PROJECTOR_MARKET_REFRESH_MS. |
+| 2026-05-20 | Epic 3 Slice 3 | completed | No FE-facing API impact | Snapshot projector prefers prior data before RPC. |
+| 2026-05-20 | Epic 3 complete | completed | No FE-facing API impact | Milestone 3 done; initiative plan fully implemented. |
+| 2026-05-20 | Review fix follow-up | completed | No FE-facing API impact | Fixed snapshot share-price freshness for price/settlement events, normalized market cache keys, narrowed projector context, configured viem chain metadata for multicall, strengthened multicall/env tests; Architecture docs checked, no update needed. |
 
 ## Remaining risks
 
@@ -72,4 +81,4 @@
 
 ## Next step
 
-Execute **Epic 2, Slice 1 — Multicall market state**.
+Initiative plan complete. Optional follow-up: `pnpm test:chain` and pilot RPC quota validation.

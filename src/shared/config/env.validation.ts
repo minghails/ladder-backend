@@ -47,6 +47,11 @@ const envSchema = z
       .int()
       .positive()
       .default(15_000),
+    PROJECTOR_MARKET_REFRESH_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(900_000),
     HEALTH_CHECK_TIMEOUT_MS: z.coerce.number().int().positive().default(1_000),
     HEALTH_PROJECTOR_MAX_LAG_BLOCKS: z.coerce
       .number()
