@@ -222,4 +222,36 @@ describe('validateEnv', () => {
 
     expect(result.corsAllowedOrigins).toEqual(['https://app.example.com']);
   });
+
+  it('should default RPC_READ_CACHE_TTL_MS to 15000', () => {
+    const result = validateEnv({
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/ladder_dev',
+      RPC_URL: 'http://localhost:8545',
+      MARKET_ADDRESS: '0x1234567890123456789012345678901234567890',
+    });
+
+    expect(result.RPC_READ_CACHE_TTL_MS).toBe(15_000);
+  });
+
+  it('should accept a custom RPC_READ_CACHE_TTL_MS', () => {
+    const result = validateEnv({
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/ladder_dev',
+      RPC_URL: 'http://localhost:8545',
+      MARKET_ADDRESS: '0x1234567890123456789012345678901234567890',
+      RPC_READ_CACHE_TTL_MS: '30000',
+    });
+
+    expect(result.RPC_READ_CACHE_TTL_MS).toBe(30_000);
+  });
+
+  it('should reject non-positive RPC_READ_CACHE_TTL_MS', () => {
+    expect(() =>
+      validateEnv({
+        DATABASE_URL: 'postgresql://user:pass@localhost:5432/ladder_dev',
+        RPC_URL: 'http://localhost:8545',
+        MARKET_ADDRESS: '0x1234567890123456789012345678901234567890',
+        RPC_READ_CACHE_TTL_MS: '0',
+      }),
+    ).toThrow();
+  });
 });

@@ -1,5 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Address } from 'viem';
+import { DEFAULT_RPC_READ_CACHE_TTL_MS, RpcReadCache } from './rpc-read-cache';
 import { marketDisplaySymbol } from './token-display.config';
 import { ViemClientService } from './viem-client.service';
 import {
@@ -150,10 +152,33 @@ function mapSimulationRevertReason(error: unknown): { reason: string; errorName:
 @Injectable()
 export class ContractReaderService {
   private readonly logger = new Logger(ContractReaderService.name);
+  private readonly marketStateCache: RpcReadCache<LiveMarketState>;
+  private readonly tokenMetadataCache: RpcReadCache<TokenMetadata>;
 
-  constructor(private readonly viem: ViemClientService) {}
+  constructor(
+    private readonly viem: ViemClientService,
+    @Optional() config?: ConfigService,
+  ) {
+    const ttlMs =
+      config?.get<number>('blockchain.readCacheTtlMs') ??
+      DEFAULT_RPC_READ_CACHE_TTL_MS;
+    this.marketStateCache = new RpcReadCache(ttlMs);
+    this.tokenMetadataCache = new RpcReadCache(ttlMs);
+  }
 
   async getTokenMetadata(address: string): Promise<TokenMetadata> {
+    const key = `token:${address.toLowerCase()}`;
+    const cached = this.tokenMetadataCache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const result = await this.fetchTokenMetadata(address);
+    this.tokenMetadataCache.set(key, result);
+    return result;
+  }
+
+  private async fetchTokenMetadata(address: string): Promise<TokenMetadata> {
     const client = this.viem.getPublicClient();
     const tokenAddress = address as Address;
     const [symbol, decimals] = await Promise.all([
@@ -169,6 +194,18 @@ export class ContractReaderService {
   }
 
   async getMarketState(): Promise<LiveMarketState> {
+    const key = `market:${this.viem.getMarketAddress()}`;
+    const cached = this.marketStateCache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const result = await this.fetchMarketState();
+    this.marketStateCache.set(key, result);
+    return result;
+  }
+
+  private async fetchMarketState(): Promise<LiveMarketState> {
     const client = this.viem.getPublicClient();
     const marketAddress = this.viem.getMarketAddress();
 
@@ -358,9 +395,12 @@ export class ContractReaderService {
     }
   }
 
-  async getPortfolioPositions(walletAddress: string): Promise<LivePortfolioPosition[]> {
+  async getPortfolioPositions(
+    walletAddress: string,
+    preloadedMarket?: LiveMarketState,
+  ): Promise<LivePortfolioPosition[]> {
     const client = this.viem.getPublicClient();
-    const market = await this.getMarketState();
+    const market = preloadedMarket ?? (await this.getMarketState());
     const wallet = walletAddress as Address;
     const stAddress = market.seniorTrancheAddress as Address;
     const jtAddress = market.juniorTrancheAddress as Address;

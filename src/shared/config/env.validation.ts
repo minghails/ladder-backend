@@ -57,6 +57,11 @@ const envSchema = z
       .enum(['true', 'false'])
       .default('true')
       .transform((value) => value === 'true'),
+    RPC_READ_CACHE_TTL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(15_000),
   })
   .superRefine((config, ctx) => {
     let corsAllowedOrigins: string[];

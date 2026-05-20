@@ -57,6 +57,10 @@ export const blockchainConfig = registerAs('blockchain', () => {
     midasPriceOracleAddress,
     midasIssuanceVaultAddress,
     midasRedemptionVaultAddress,
+    readCacheTtlMs: parseInt(
+      process.env['RPC_READ_CACHE_TTL_MS'] ?? '15000',
+      10,
+    ),
   };
 });
 

@@ -273,8 +273,10 @@ describe('PortfolioService', () => {
 
     const portfolio = await service.getPortfolio('0xABCDEF0000000000000000000000000000000001');
 
+    expect(contractReader.getMarketState).toHaveBeenCalledTimes(1);
     expect(contractReader.getPortfolioPositions).toHaveBeenCalledWith(
       '0xabcdef0000000000000000000000000000000001',
+      LIVE_MARKET,
     );
     expect(portfolio.walletAddress).toBe('0xabcdef0000000000000000000000000000000001');
     expect(portfolio.summary).toMatchObject({

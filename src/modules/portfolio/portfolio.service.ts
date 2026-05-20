@@ -633,9 +633,9 @@ export class PortfolioService {
   async getPortfolio(address: string, options?: PortfolioQueryOptions): Promise<PortfolioResponseDto> {
     void options;
     const normalizedAddress = normalizeAddress(address);
-    const [livePositions, liveMarket, requestRows, costBasisRows] = await Promise.all([
-      this.contractReader.getPortfolioPositions(normalizedAddress),
-      this.contractReader.getMarketState(),
+    const liveMarket = await this.contractReader.getMarketState();
+    const [livePositions, requestRows, costBasisRows] = await Promise.all([
+      this.contractReader.getPortfolioPositions(normalizedAddress, liveMarket),
       this.readRequests(normalizedAddress),
       this.earningsRepository.findCostBasis(normalizedAddress),
     ]);

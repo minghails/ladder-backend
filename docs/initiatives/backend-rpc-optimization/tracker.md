@@ -6,10 +6,10 @@
 
 ## Current status
 
-- Status: activated; implementation not started
-- Active epic: Epic 1 — RPC read cache and portfolio dedup
-- Active slice: Slice 1 — RPC read cache utility and env
-- Latest session log: `sessions/2026-05-20-activation.md`
+- Status: in progress
+- Active epic: Epic 2 — Multicall contract reads
+- Active slice: Slice 1 — Multicall market state
+- Latest session log: `sessions/2026-05-20-epic-01-complete.md`
 
 ## Execution rules
 
@@ -24,7 +24,7 @@
 
 | Epic | File | Status |
 |---|---|---|
-| RPC read cache and portfolio dedup | `epics/2026-05-20-epic-01-rpc-read-cache-portfolio-dedup.md` | not started |
+| RPC read cache and portfolio dedup | `epics/2026-05-20-epic-01-rpc-read-cache-portfolio-dedup.md` | completed |
 | Multicall contract reads | `epics/2026-05-20-epic-02-multicall-contract-reads.md` | not started |
 | Lighter projector and snapshot RPC reduction | `epics/2026-05-20-epic-03-lighter-projector-snapshot-rpc.md` | not started |
 
@@ -34,9 +34,9 @@
 
 | Slice | Status | Notes |
 |---|---|---|
-| Slice 1 — RPC read cache utility and env | not started | Add TTL cache helper + env/config |
-| Slice 2 — Cache getMarketState and getTokenMetadata | not started | Wrap ContractReaderService live reads |
-| Slice 3 — Portfolio overview market read dedup | not started | One market read per portfolio overview request |
+| Slice 1 — RPC read cache utility and env | completed | TTL cache helper + env/config |
+| Slice 2 — Cache getMarketState and getTokenMetadata | completed | ContractReaderService TTL cache; errors not cached |
+| Slice 3 — Portfolio overview market read dedup | completed | One getMarketState per portfolio overview request |
 
 ### Epic 2: Multicall contract reads
 
@@ -59,6 +59,10 @@
 | Date | Slice | Status | API impact | Notes |
 |---|---|---|---|---|
 | 2026-05-20 | Activation | completed | No FE-facing API impact | Plan written; initiative scaffold created. |
+| 2026-05-20 | Epic 1 Slice 1 | completed | No FE-facing API impact | RpcReadCache + RPC_READ_CACHE_TTL_MS env; architecture docs checked, no update needed. |
+| 2026-05-20 | Epic 1 Slice 2 | completed | No FE-facing API impact | Cached getMarketState/getTokenMetadata; errors not cached. |
+| 2026-05-20 | Epic 1 Slice 3 | completed | No FE-facing API impact | Portfolio overview passes preloaded market to positions path. |
+| 2026-05-20 | Epic 1 complete | completed | No FE-facing API impact | Milestone 1 done; see `sessions/2026-05-20-epic-01-complete.md`. |
 
 ## Remaining risks
 
@@ -68,4 +72,4 @@
 
 ## Next step
 
-Execute **Epic 1, Slice 1 — RPC read cache utility and env**.
+Execute **Epic 2, Slice 1 — Multicall market state**.

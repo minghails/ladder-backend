@@ -10,11 +10,13 @@ Reduce repeated live RPC reads across API requests with a short TTL cache and re
 
 ## Status
 
-Not started.
+Completed (2026-05-20).
 
 ## Slices
 
 ### Slice 1 — RPC read cache utility and env
+
+**Status:** completed (2026-05-20).
 
 **Scope**
 
@@ -39,6 +41,8 @@ Not started.
 
 ### Slice 2 — Cache getMarketState and getTokenMetadata
 
+**Status:** completed (2026-05-20).
+
 **Scope**
 
 - Integrate cache into `ContractReaderService`.
@@ -57,6 +61,8 @@ Not started.
 - API impact: `No FE-facing API impact`.
 
 ### Slice 3 — Portfolio overview market read dedup
+
+**Status:** completed (2026-05-20).
 
 **Scope**
 
